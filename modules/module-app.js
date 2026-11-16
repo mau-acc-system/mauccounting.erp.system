@@ -88,6 +88,28 @@ const id = (prefix, arr, key) =>
 
 const sheet = s => getSheet(s) || [];
 
+// Protect source records once the accounting engine has generated a posted journal.
+// Editing/deactivating them without a reversal would leave the ledger inconsistent.
+function hasPostedAccountingImpact(record) {
+  const sourceMap = {
+    Invoices: ["SalesInvoice", "InvoiceID"],
+    Bills: ["PurchaseBill", "BillID"],
+    CustomerPayments: ["CustomerPayment", "PaymentID"],
+    VendorPayments: ["VendorPayment", "PaymentID"],
+    InvoiceLines: ["SalesInvoice", "InvoiceID"],
+    BillLines: ["PurchaseBill", "BillID"]
+  };
+  const mapping = sourceMap[cfg.sheet];
+  if (!mapping || !record) return false;
+  const [sourceType, sourceKey] = mapping;
+  const sourceId = record[sourceKey];
+  if (sourceId == null || sourceId === "") return false;
+  return (getSheet("JournalEntries") || []).some(j =>
+    String(j.SourceType) === sourceType && String(j.SourceID) === String(sourceId) &&
+    String(j.Status || "Posted").toLowerCase() === "posted"
+  );
+}
+
 // ==========================================
 // MESSAGE
 // ==========================================
@@ -647,6 +669,11 @@ $("tableBody").addEventListener("click", async e => {
   if (del !== undefined) {
     const r = data[Number(del)];
 
+    if (hasPostedAccountingImpact(r)) {
+      message("This transaction is already posted to the General Ledger. Create a correcting/reversal transaction instead of deactivating it.", true);
+      return;
+    }
+
     if (!confirm("Deactivate this record?")) return;
 
     try {
@@ -681,6 +708,11 @@ $("tableBody").addEventListener("click", async e => {
     if (!allowed("CanEdit")) return;
 
     const r = data[Number(edit)];
+
+    if (hasPostedAccountingImpact(r)) {
+      message("This transaction is already posted to the General Ledger. Editing is blocked to protect the journal. Use a correcting/reversal transaction instead.", true);
+      return;
+    }
 
     openEditModal(r);
   }

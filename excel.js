@@ -21,6 +21,7 @@ export async function readExcel(){if(!githubToken)await loadLicense();const m=aw
  workbook={SheetNames:pairs.map(x=>x[0]),Sheets:Object.fromEntries(pairs)};dirty.clear();return getSheetNames();}
 export function getSheetNames(){if(!workbook)throw Error('Database not loaded');return [...workbook.SheetNames];}
 export function getSheet(name){if(!workbook)throw Error('Database not loaded');const s=workbook.Sheets[name];if(!s)throw Error('Sheet not found: '+name);return s.records.map(r=>({...r}));}
+export function getSheetHeaders(name){if(!workbook)throw Error('Database not loaded');const s=workbook.Sheets[name];if(!s)throw Error('Sheet not found: '+name);return [...new Set([...(s.headers||[]),...s.records.flatMap(r=>Object.keys(r||{}))])];}
 function getData(name){if(!workbook)throw Error('Database not loaded');const s=workbook.Sheets[name];if(!s)throw Error('Sheet not found: '+name);return s;}
 export function addRecord(name,record){const s=getData(name);for(const k of Object.keys(record))if(!s.headers.includes(k))s.headers.push(k);s.records.push({...record});dirty.add(name);return true;}
 export function updateRecord(name,column,value,updates){const s=getData(name);const index=s.records.findIndex(r=>String(r[column])===String(value));if(index<0)throw Error('Record not found');for(const k of Object.keys(updates))if(!s.headers.includes(k))s.headers.push(k);s.records[index]={...s.records[index],...updates};dirty.add(name);return true;}
