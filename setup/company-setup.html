@@ -1,0 +1,452 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Company Setup | Mauccounting ERP System</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px;font-family:Arial,Helvetica,sans-serif;background:#f4f6fa;color:#202b3c}
+.heading{margin-bottom:24px}
+.heading h2{margin:0 0 7px;font-size:23px}
+.heading p{margin:0;color:#8993a5;font-size:13px}
+.card{background:white;border:1px solid #e8ecf2;border-radius:10px;padding:25px;max-width:1000px;margin-bottom:22px}
+.card h3{font-size:16px;margin:0 0 22px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:19px}
+.field{display:flex;flex-direction:column;gap:8px}
+.field.full{grid-column:1/-1}
+label{font-size:12px;font-weight:bold;color:#536176}
+input,select,textarea{width:100%;min-height:42px;padding:10px 12px;border:1px solid #dce2eb;border-radius:6px;background:white;font-family:inherit;font-size:13px;outline:none}
+textarea{min-height:75px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:#315efb;box-shadow:0 0 0 3px rgba(49,94,251,.08)}
+.hint{color:#8993a5;font-size:11px;line-height:1.5}
+.warning{padding:12px 14px;border-radius:6px;background:#fff7e6;color:#946200;font-size:12px;line-height:1.6}
+.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:25px;padding-top:20px;border-top:1px solid #edf0f5}
+button.action{border:0;border-radius:6px;padding:11px 20px;font-size:12px;font-weight:bold;cursor:pointer}
+.save{background:#315efb;color:white}
+.save:hover{background:#244bd2}
+.reset{background:#edf0f5;color:#536176}
+button:disabled{opacity:.6;cursor:wait}
+.message{display:none;padding:12px 14px;border-radius:6px;font-size:12px;margin-bottom:20px}
+.message.success{display:block;background:#e8f8ef;color:#16834b}
+.message.error{display:block;background:#fff0f0;color:#c03939}
+@media(max-width:650px){
+body{padding:17px}
+.card{padding:18px}
+.form-grid{grid-template-columns:1fr}
+.field.full{grid-column:auto}
+}
+</style>
+</head>
+
+<body>
+
+<div class="heading">
+    <h2>Company Setup</h2>
+    <p>Configure your company profile and accounting preferences.</p>
+</div>
+
+<div id="message" class="message"></div>
+
+<form id="companyForm">
+
+<div class="card">
+    <h3>Company Information</h3>
+    <div class="form-grid">
+
+        <div class="field">
+            <label for="companyName">Company Name *</label>
+            <input type="text" id="companyName" required placeholder="Enter company name">
+        </div>
+
+        <div class="field">
+            <label for="legalName">Registered Legal Name</label>
+            <input type="text" id="legalName" placeholder="Enter registered legal name">
+        </div>
+
+        <div class="field">
+            <label for="tin">Tax Identification Number (TIN)</label>
+            <input type="text" id="tin" placeholder="000-000-000-000">
+        </div>
+
+        <div class="field">
+            <label for="phone">Contact Number</label>
+            <input type="tel" id="phone" placeholder="Enter contact number">
+        </div>
+
+        <div class="field full">
+            <label for="address">Company Address</label>
+            <textarea id="address" placeholder="Enter complete company address"></textarea>
+        </div>
+
+        <div class="field full">
+            <label for="email">Company Email</label>
+            <input type="email" id="email" placeholder="company@example.com">
+        </div>
+
+    </div>
+</div>
+
+<div class="card">
+    <h3>Accounting Settings</h3>
+
+    <div class="form-grid">
+
+        <div class="field">
+            <label for="currency">Base Currency *</label>
+            <select id="currency" required>
+                <option value="PHP">PHP - Philippine Peso (₱)</option>
+                <option value="USD">USD - US Dollar ($)</option>
+                <option value="EUR">EUR - Euro (€)</option>
+                <option value="GBP">GBP - British Pound (£)</option>
+                <option value="JPY">JPY - Japanese Yen (¥)</option>
+                <option value="SGD">SGD - Singapore Dollar (S$)</option>
+                <option value="AUD">AUD - Australian Dollar (A$)</option>
+                <option value="CAD">CAD - Canadian Dollar (C$)</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="dateFormat">Date Format *</label>
+            <select id="dateFormat" required>
+                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="fiscalStart">Fiscal Year Start *</label>
+            <input type="date" id="fiscalStart" required>
+        </div>
+
+        <div class="field">
+            <label for="fiscalEnd">Fiscal Year End *</label>
+            <input type="date" id="fiscalEnd" required>
+        </div>
+
+        <div class="field full">
+            <div class="hint">
+                Fiscal year dates determine the accounting period used by the system.
+                Ensure that the start date is earlier than the end date.
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="card">
+    <h3>Inventory Settings</h3>
+
+    <div class="form-grid">
+
+        <div class="field full">
+            <label for="costingMethod">Inventory Costing Method *</label>
+            <select id="costingMethod" required>
+                <option value="FIFO">FIFO - First In, First Out</option>
+                <option value="WA">Moving Weighted Average</option>
+                <option value="LIFO">LIFO - Last In, First Out</option>
+            </select>
+            <div class="hint">
+                Select how the system calculates the cost of inventory issued.
+                This setting will be used by the Stock Movement module.
+            </div>
+        </div>
+
+        <div class="field full">
+            <div class="warning">
+                <strong>Important accounting note:</strong>
+                LIFO is included as an internal costing option for testing and
+                management purposes. However, LIFO is not permitted under
+                PFRS/IAS 2 for financial reporting. Use FIFO or Moving Weighted
+                Average for PFRS-compliant inventory reporting.
+            </div>
+        </div>
+
+    </div>
+
+    <div class="actions">
+        <button type="button" class="action reset" id="resetButton">
+            Reset Changes
+        </button>
+        <button type="submit" class="action save" id="saveButton" disabled>
+            Save Company Setup
+        </button>
+    </div>
+</div>
+
+</form>
+
+<script type="module">
+import {
+    validateLicense,
+    readExcel,
+    getSheet,
+    addRecord,
+    updateRecord,
+    saveExcel
+} from "../excel.js";
+
+const session = JSON.parse(
+    sessionStorage.getItem("accsystem_session") || "null"
+);
+
+if (!session) {
+    window.top.location.href = "../login.html";
+}
+
+if (!session || session.Role !== "Administrator") {
+    document.body.innerHTML =
+        "<h2>Access Denied</h2><p>Administrator access is required.</p>";
+    throw new Error("Unauthorized access");
+}
+
+const COMPANY_ID = "C001";
+
+const form = document.getElementById("companyForm");
+const message = document.getElementById("message");
+const saveButton = document.getElementById("saveButton");
+const resetButton = document.getElementById("resetButton");
+
+let databaseReady = false;
+let originalData = null;
+let companyExists = false;
+
+function showMessage(text, type) {
+    message.textContent = text;
+    message.className = "message " + type;
+}
+
+function hideMessage() {
+    message.textContent = "";
+    message.className = "message";
+}
+
+function getFormData() {
+    return {
+        CompanyID: COMPANY_ID,
+        CompanyName: document.getElementById("companyName").value.trim(),
+        LegalName: document.getElementById("legalName").value.trim(),
+        TIN: document.getElementById("tin").value.trim(),
+        Address: document.getElementById("address").value.trim(),
+        Email: document.getElementById("email").value.trim(),
+        Phone: document.getElementById("phone").value.trim(),
+        Currency: document.getElementById("currency").value,
+        FiscalYearStart: document.getElementById("fiscalStart").value,
+        FiscalYearEnd: document.getElementById("fiscalEnd").value,
+        DateFormat: document.getElementById("dateFormat").value,
+        InventoryCostingMethod: document.getElementById("costingMethod").value,
+        UpdatedAt: new Date().toISOString()
+    };
+}
+
+function populateForm(data) {
+    document.getElementById("companyName").value =
+        data.CompanyName || "";
+
+    document.getElementById("legalName").value =
+        data.LegalName || "";
+
+    document.getElementById("tin").value =
+        data.TIN || "";
+
+    document.getElementById("address").value =
+        data.Address || "";
+
+    document.getElementById("email").value =
+        data.Email || "";
+
+    document.getElementById("phone").value =
+        data.Phone || "";
+
+    document.getElementById("currency").value =
+        data.Currency || "PHP";
+
+    document.getElementById("fiscalStart").value =
+        data.FiscalYearStart || "2026-01-01";
+
+    document.getElementById("fiscalEnd").value =
+        data.FiscalYearEnd || "2026-12-31";
+
+    document.getElementById("dateFormat").value =
+        data.DateFormat || "MM/DD/YYYY";
+
+    document.getElementById("costingMethod").value =
+        data.InventoryCostingMethod || "FIFO";
+}
+
+function resetForm() {
+    if (originalData) {
+        populateForm(originalData);
+    }
+    hideMessage();
+}
+
+async function initialize() {
+    try {
+        const license = await validateLicense();
+
+        if (!license.valid) {
+            throw new Error(
+                license.message || "License validation failed."
+            );
+        }
+
+        await readExcel();
+
+        const records = getSheet("CompanySetup") || [];
+
+        const existing = records.find(
+            row => String(row.CompanyID) === COMPANY_ID
+        );
+
+        companyExists = Boolean(existing);
+
+        const defaults = {
+            CompanyID: COMPANY_ID,
+            CompanyName: "ABC Trading Services",
+            LegalName: "",
+            TIN: "",
+            Address: "",
+            Email: "",
+            Phone: "",
+            Currency: "PHP",
+            FiscalYearStart: "2026-01-01",
+            FiscalYearEnd: "2026-12-31",
+            DateFormat: "MM/DD/YYYY",
+            InventoryCostingMethod: "FIFO",
+            UpdatedAt: ""
+        };
+
+        originalData = existing
+            ? { ...defaults, ...existing }
+            : defaults;
+
+        if (!originalData.InventoryCostingMethod) {
+            originalData.InventoryCostingMethod = "FIFO";
+        }
+
+        populateForm(originalData);
+
+        databaseReady = true;
+        saveButton.disabled = false;
+
+        showMessage(
+            existing
+                ? "Company information loaded successfully."
+                : "No company profile found. Complete the form to create one.",
+            "success"
+        );
+
+    } catch (error) {
+        showMessage(
+            "Database connection failed: " + error.message,
+            "error"
+        );
+    }
+}
+
+resetButton.addEventListener("click", resetForm);
+
+form.addEventListener("submit", async event => {
+    event.preventDefault();
+    hideMessage();
+
+    if (!databaseReady) {
+        showMessage(
+            "Database is not ready. Please refresh the page.",
+            "error"
+        );
+        return;
+    }
+
+    const data = getFormData();
+
+    if (!data.CompanyName) {
+        showMessage("Company Name is required.", "error");
+        return;
+    }
+
+    if (!data.FiscalYearStart || !data.FiscalYearEnd) {
+        showMessage("Please provide both fiscal year dates.", "error");
+        return;
+    }
+
+    if (data.FiscalYearStart >= data.FiscalYearEnd) {
+        showMessage(
+            "Fiscal Year Start must be earlier than Fiscal Year End.",
+            "error"
+        );
+        return;
+    }
+
+    if (!["FIFO", "WA", "LIFO"].includes(data.InventoryCostingMethod)) {
+        showMessage("Invalid inventory costing method.", "error");
+        return;
+    }
+
+    const oldMethod = originalData?.InventoryCostingMethod || "FIFO";
+
+    if (
+        companyExists &&
+        oldMethod !== data.InventoryCostingMethod
+    ) {
+        const confirmed = confirm(
+            "You are changing the inventory costing method from " +
+            oldMethod + " to " + data.InventoryCostingMethod +
+            ". This will affect future inventory cost calculations. " +
+            "Existing transaction records will not be automatically recalculated. " +
+            "Do you want to continue?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+    }
+
+    saveButton.disabled = true;
+    resetButton.disabled = true;
+    saveButton.textContent = "Saving...";
+
+    try {
+        if (companyExists) {
+            updateRecord(
+                "CompanySetup",
+                "CompanyID",
+                COMPANY_ID,
+                data
+            );
+        } else {
+            addRecord("CompanySetup", data);
+        }
+
+        await saveExcel();
+
+        companyExists = true;
+        originalData = { ...data };
+
+        showMessage(
+            "Company setup successfully saved.",
+            "success"
+        );
+
+    } catch (error) {
+        showMessage(
+            "Unable to save company setup: " + error.message,
+            "error"
+        );
+    } finally {
+        saveButton.disabled = false;
+        resetButton.disabled = false;
+        saveButton.textContent = "Save Company Setup";
+    }
+});
+
+initialize();
+</script>
+
+</body>
+</html>

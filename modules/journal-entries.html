@@ -1,0 +1,250 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Journal Entries | Mauccounting ERP System</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:26px;background:#f4f6fa;color:#26364e;font:14px Arial}
+h2{margin:0 0 6px}
+p{color:#8993a5}
+.card{background:white;border:1px solid #e8ecf2;border-radius:10px;padding:20px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+label{display:grid;gap:6px;color:#68758a;font-size:11px}
+input,select{width:100%;padding:10px;border:1px solid #dce2eb;border-radius:6px;background:white;color:#26364e}
+button{padding:9px 13px;border:0;border-radius:6px;background:#315efb;color:white;cursor:pointer;font-weight:bold;font-size:11px}
+button:disabled{opacity:.4;cursor:not-allowed}
+.post{background:#16834b}
+.msg{display:none;padding:11px;border-radius:6px;margin:12px 0;font-size:12px}
+.msg.good,.msg.bad{display:block}
+.good{background:#e8f8ef;color:#16834b}
+.bad{background:#fff0f0;color:#c03939}
+.wrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:850px}
+th,td{text-align:left;padding:11px;border-bottom:1px solid #edf0f5;font-size:12px}
+th{background:#f5f7fb;color:#68758a}
+.empty{text-align:center;color:#8993a5;padding:25px}
+.summary{display:flex;gap:25px;flex-wrap:wrap;margin-top:15px}
+.summary strong{font-size:18px}
+.status{font-weight:bold}
+</style>
+</head>
+<body>
+
+<h2>Journal Entries</h2>
+<p>Create journal headers and monitor debit/credit balances.</p>
+<div id="msg" class="msg"></div>
+
+<section class="card">
+<h3>New Journal Entry</h3>
+<form id="form">
+<div class="grid">
+<label>Journal No.
+<input id="journalNo" readonly>
+</label>
+<label>Journal Date
+<input name="JournalDate" type="date" required>
+</label>
+<label>Reference No.
+<input name="ReferenceNo">
+</label>
+<label>Description
+<input name="Description" required>
+</label>
+</div>
+<p><button id="save" type="submit">Create Draft Journal</button></p>
+</form>
+</section>
+
+<section class="card">
+<h3>Journal Records</h3>
+<div class="wrap">
+<table>
+<thead>
+<tr>
+<th>Journal No.</th>
+<th>Date</th>
+<th>Reference</th>
+<th>Description</th>
+<th>Debit</th>
+<th>Credit</th>
+<th>Difference</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+</section>
+
+<script type="module">
+import {
+ validateLicense,readExcel,getSheet,addRecord,updateRecord,saveExcel
+} from "../excel.js";
+
+const $=id=>document.getElementById(id);
+const session=JSON.parse(sessionStorage.getItem("accsystem_session")||"null");
+if(!session){window.top.location.href="../login.html";throw new Error("Session required");}
+
+let journals=[];
+let lines=[];
+
+const money=v=>Number(v||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const now=()=>new Date().toISOString();
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const msg=(t,bad=false)=>{$("msg").textContent=t;$("msg").className="msg "+(bad?"bad":"good");};
+
+function nextID(prefix,rows,key){
+ const nums=rows.map(r=>parseInt(String(r[key]||"").replace(/\D/g,""))||0);
+ return prefix+String(Math.max(0,...nums)+1).padStart(5,"0");
+}
+
+function nextJournalNo(){
+ const nums=journals.map(r=>parseInt(String(r.JournalNo||"").replace(/\D/g,""))||0);
+ return "JE-"+String(Math.max(0,...nums)+1).padStart(5,"0");
+}
+
+function totals(journalID){
+ const own=lines.filter(x=>String(x.JournalID)===String(journalID));
+ return {
+  debit:own.reduce((s,x)=>s+Number(x.Debit||0),0),
+  credit:own.reduce((s,x)=>s+Number(x.Credit||0),0)
+ };
+}
+
+function render(){
+ $("journalNo").value=nextJournalNo();
+
+ $("tableBody").innerHTML=journals.map(j=>{
+  const t=totals(j.JournalID);
+  const diff=Math.round((t.debit-t.credit)*100)/100;
+  const balanced=t.debit>0&&t.credit>0&&Math.abs(diff)<0.005;
+  const posted=String(j.Status).toLowerCase()==="posted";
+
+  return `<tr>
+   <td>${esc(j.JournalNo)}</td>
+   <td>${esc(j.JournalDate)}</td>
+   <td>${esc(j.ReferenceNo)}</td>
+   <td>${esc(j.Description)}</td>
+   <td>${money(t.debit)}</td>
+   <td>${money(t.credit)}</td>
+   <td>${money(diff)}</td>
+   <td class="status">${esc(j.Status)}</td>
+   <td>
+    <button data-lines="${esc(j.JournalID)}">View Lines</button>
+    ${!posted?`<button class="post" data-post="${esc(j.JournalID)}" ${balanced?"":"disabled"}>Post</button>`:""}
+   </td>
+  </tr>`;
+ }).join("")||`<tr><td colspan="9" class="empty">No journal entries found.</td></tr>`;
+}
+
+async function reload(){
+ journals=getSheet("JournalEntries");
+ lines=getSheet("JournalEntryLines");
+ render();
+}
+
+$("form").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const button=$("save");
+ try{
+  button.disabled=true;
+  const fd=new FormData(e.target);
+  const journalID=nextID("JE",journals,"JournalID");
+  const journalNo=nextJournalNo();
+  const timestamp=now();
+
+  const record={
+   JournalID:journalID,
+   JournalNo:journalNo,
+   JournalDate:fd.get("JournalDate"),
+   ReferenceNo:fd.get("ReferenceNo")||"",
+   Description:fd.get("Description")||"",
+   Status:"Draft",
+   TotalDebit:0,
+   TotalCredit:0,
+   CreatedBy:session.Username||session.UserID||"",
+   CreatedAt:timestamp,
+   PostedBy:"",
+   PostedAt:"",
+   UpdatedAt:timestamp
+  };
+
+  addRecord("JournalEntries",record);
+  await saveExcel("Create journal "+journalNo);
+  await reload();
+  e.target.reset();
+  msg("Draft journal created. Add its journal lines next.");
+ }catch(err){
+  console.error(err);
+  msg(err.message,true);
+ }finally{
+  button.disabled=false;
+ }
+});
+
+$("tableBody").addEventListener("click",async e=>{
+ const view=e.target.dataset.lines;
+ const post=e.target.dataset.post;
+
+ if(view){
+  sessionStorage.setItem("accsystem_selected_journal",view);
+  window.location.href="journal-entry-lines.html";
+  return;
+ }
+
+ if(post){
+  try{
+   const journal=journals.find(x=>String(x.JournalID)===String(post));
+   if(!journal)throw new Error("Journal not found.");
+   if(String(journal.Status).toLowerCase()==="posted")throw new Error("Journal is already posted.");
+
+   const t=totals(post);
+   const debit=Math.round(t.debit*100)/100;
+   const credit=Math.round(t.credit*100)/100;
+
+   if(debit<=0||credit<=0||debit!==credit){
+    throw new Error("Cannot post: Journal must have equal and non-zero Debit and Credit totals.");
+   }
+
+   if(!confirm("Post this balanced journal? Posted journals cannot be edited."))return;
+
+   updateRecord("JournalEntries","JournalID",post,{
+    TotalDebit:debit,
+    TotalCredit:credit,
+    Status:"Posted",
+    PostedBy:session.Username||session.UserID||"",
+    PostedAt:now(),
+    UpdatedAt:now()
+   });
+
+   await saveExcel("Post journal "+journal.JournalNo);
+   await reload();
+   msg("Journal successfully posted.");
+  }catch(err){
+   console.error(err);
+   msg(err.message,true);
+  }
+ }
+});
+
+async function init(){
+ try{
+  const license=await validateLicense();
+  if(!license?.valid)throw new Error(license?.message||"License validation failed.");
+  await readExcel();
+  await reload();
+  msg("Journal Entries loaded.");
+ }catch(err){
+  console.error(err);
+  msg(err.message,true);
+ }
+}
+init();
+</script>
+</body>
+</html>

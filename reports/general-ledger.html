@@ -1,0 +1,440 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>General Ledger Report</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6fa;color:#202b3c;font:14px Arial,sans-serif;padding:26px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:20px}
+.muted{color:#8993a5;font-size:12px}
+.title{font-size:23px;font-weight:700;margin:5px 0}
+.actions{display:flex;gap:8px}
+button{border:1px solid #dce2ec;background:#fff;border-radius:7px;padding:9px 13px;cursor:pointer}
+.primary{background:#315efb;color:#fff;border-color:#315efb}
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0;align-items:end}
+.filters label{font-size:11px;color:#68758a;display:grid;gap:5px}
+input,select{padding:9px;border:1px solid #dce2ec;border-radius:6px;background:#fff;min-width:150px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0}
+.stat{background:#fff;border:1px solid #e8ecf2;border-radius:9px;padding:16px}
+.stat span{display:block;color:#8993a5;font-size:11px}
+.stat b{display:block;font-size:20px;margin-top:8px}
+.panel{background:#fff;border:1px solid #e8ecf2;border-radius:9px;padding:16px;margin-bottom:15px}
+.table-wrap{overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{text-align:left;padding:11px 10px;border-bottom:1px solid #edf0f5;font-size:12px}
+th{background:#f8f9fc;color:#68758a;position:sticky;top:0}
+.right{text-align:right}
+.empty{text-align:center;color:#8993a5;padding:25px}
+.error{padding:18px;background:#fff4f2;border:1px solid #ffd6cf;border-radius:8px;color:#a33}
+.balance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.balance-box{background:#f8f9fc;border-radius:8px;padding:14px}
+.balance-box span{display:block;color:#8993a5;font-size:11px}
+.balance-box b{display:block;font-size:17px;margin-top:7px}
+.note{font-size:11px;color:#8993a5;margin-top:10px}
+.filters button{height:35px}
+@media print{
+ body{padding:0;background:#fff}
+ .actions,.filters{display:none}
+ .panel,.stat{border:1px solid #ddd}
+}
+@media(max-width:600px){
+ body{padding:14px}
+ .head{display:block}
+ .actions{margin-top:12px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="head">
+ <div>
+  <div class="muted" id="company">Mauccounting ERP System</div>
+  <div class="title">General Ledger</div>
+  <div class="muted">Currency: <span id="currency">PHP</span></div>
+ </div>
+ <div class="actions">
+  <button id="csvBtn">Export CSV</button>
+  <button id="printBtn" class="primary">Print</button>
+ </div>
+</div>
+
+<div class="filters">
+ <label>
+  Account
+  <select id="accountFilter">
+   <option value="">All Accounts</option>
+  </select>
+ </label>
+
+ <label>
+  From Date
+  <input type="date" id="fromDate">
+ </label>
+
+ <label>
+  To Date
+  <input type="date" id="toDate">
+ </label>
+
+ <label>
+  Journal No.
+  <input type="text" id="journalFilter" placeholder="Search journal">
+ </label>
+
+ <button id="applyBtn" class="primary">Apply Filters</button>
+ <button id="resetBtn">Reset</button>
+</div>
+
+<div id="stats" class="stats"></div>
+
+<section class="panel">
+ <h3>Account Balance Summary</h3>
+ <div class="balance-grid" id="balanceSummary"></div>
+ <div class="note">
+  Balances are calculated from posted journal activity only.
+  Opening balances are not included in this report.
+ </div>
+</section>
+
+<section class="panel">
+ <h3>General Ledger Transactions</h3>
+ <div class="table-wrap">
+  <table>
+   <thead>
+    <tr>
+     <th>Date</th>
+     <th>Journal No.</th>
+     <th>Account</th>
+     <th>Account Name</th>
+     <th>Description</th>
+     <th class="right">Debit</th>
+     <th class="right">Credit</th>
+     <th class="right">Running Balance</th>
+    </tr>
+   </thead>
+   <tbody id="reportBody">
+    <tr><td colspan="8" class="empty">Loading report...</td></tr>
+   </tbody>
+  </table>
+ </div>
+</section>
+
+<script type="module">
+import {validateLicense,readExcel,getSheet} from "../excel.js";
+
+const $=id=>document.getElementById(id);
+
+let allRows=[];
+let accounts=[];
+let company={};
+let currency="PHP";
+let reportRows=[];
+let summaryRows=[];
+
+const num=v=>{
+ const n=Number(String(v??0).replace(/[,₱$ ]/g,""));
+ return Number.isFinite(n)?n:0;
+};
+
+const money=v=>new Intl.NumberFormat("en-PH",{
+ style:"currency",
+ currency:currency==="PHP"?"PHP":currency,
+ minimumFractionDigits:2
+}).format(num(v));
+
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+
+function dateVal(v){
+ if(!v)return "";
+ if(v instanceof Date)return v.toISOString().slice(0,10);
+ const s=String(v);
+ if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+ const d=new Date(v);
+ return isNaN(d)?s.slice(0,10):d.toISOString().slice(0,10);
+}
+
+function isActive(v){
+ return v===true ||
+  String(v).toLowerCase()==="true" ||
+  String(v)==="1" ||
+  String(v).toLowerCase()==="active";
+}
+
+function isPosted(v){
+ return String(v||"").trim().toLowerCase()==="posted";
+}
+
+function accountNormalBalance(account){
+ const normal=String(account?.NormalBalance||"").toLowerCase();
+ if(normal.includes("credit"))return "credit";
+ return "debit";
+}
+
+function signedMovement(row,account){
+ return accountNormalBalance(account)==="credit"
+  ? num(row.credit)-num(row.debit)
+  : num(row.debit)-num(row.credit);
+}
+
+function buildData(){
+ const journals=getSheet("JournalEntries")||[];
+ const lines=getSheet("JournalEntryLines")||[];
+
+ const journalMap=Object.fromEntries(
+  journals.map(j=>[String(j.JournalID),j])
+ );
+
+ const accountMap=Object.fromEntries(
+  accounts.map(a=>[String(a.AccountID),a])
+ );
+
+ allRows=lines.map(line=>{
+  const journal=journalMap[String(line.JournalID)]||{};
+  const account=accountMap[String(line.AccountID)]||{};
+
+  return {
+   date:dateVal(journal.JournalDate),
+   journalID:line.JournalID,
+   journal:journal.JournalNo||"",
+   status:journal.Status||"",
+   accountID:line.AccountID||"",
+   account:line.AccountCode||account.AccountCode||"",
+   name:line.AccountName||account.AccountName||"",
+   normalBalance:accountNormalBalance(account),
+   description:line.Description||journal.Description||"",
+   debit:num(line.Debit),
+   credit:num(line.Credit)
+  };
+ }).filter(r=>r.journal&&isPosted(r.status));
+}
+
+function renderAccountOptions(){
+ const select=$("accountFilter");
+ const previous=select.value;
+
+ select.innerHTML=
+  `<option value="">All Accounts</option>`+
+  accounts.filter(a=>isActive(a.IsActive)).map(a=>
+   `<option value="${esc(a.AccountID)}">${esc(a.AccountCode)} — ${esc(a.AccountName)}</option>`
+  ).join("");
+
+ if(accounts.some(a=>String(a.AccountID)===previous)){
+  select.value=previous;
+ }
+}
+
+function calculateReport(){
+ const accountID=$("accountFilter").value;
+ const from=$("fromDate").value;
+ const to=$("toDate").value;
+ const journalSearch=$("journalFilter").value.trim().toLowerCase();
+
+ if(from&&to&&from>to){
+  throw new Error("From Date cannot be later than To Date.");
+ }
+
+ const selectedAccount=accounts.find(a=>String(a.AccountID)===accountID);
+
+ const source=allRows.filter(r=>{
+  if(accountID&&String(r.accountID)!==String(accountID))return false;
+  if(journalSearch&&!String(r.journal).toLowerCase().includes(journalSearch))return false;
+  return true;
+ });
+
+ // Sort chronologically, then by journal and line order.
+ source.sort((a,b)=>
+  a.date.localeCompare(b.date)||
+  a.journal.localeCompare(b.journal)
+ );
+
+ const before=source.filter(r=>from&&r.date<from);
+ const visible=source.filter(r=>
+  (!from||r.date>=from)&&(!to||r.date<=to)
+ );
+
+ // Compute beginning balances independently for each account.
+ const beginningByAccount={};
+
+ for(const r of before){
+  const key=String(r.accountID);
+  const account=accounts.find(a=>String(a.AccountID)===key)||{};
+  beginningByAccount[key]=(beginningByAccount[key]||0)+signedMovement(r,account);
+ }
+
+ const running={...beginningByAccount};
+
+ reportRows=visible.map(r=>{
+  const key=String(r.accountID);
+  const account=accounts.find(a=>String(a.AccountID)===key)||{};
+  running[key]=(running[key]||0)+signedMovement(r,account);
+
+  return {
+   ...r,
+   runningBalance:running[key]
+  };
+ });
+
+ const debit=visible.reduce((s,r)=>s+r.debit,0);
+ const credit=visible.reduce((s,r)=>s+r.credit,0);
+
+ const totalBeginning=Object.values(beginningByAccount).reduce((s,v)=>s+v,0);
+ const totalEnding=Object.values(running).reduce((s,v)=>s+v,0);
+
+ // For all accounts, show individual account balances in the summary.
+ summaryRows=accounts
+  .filter(a=>!accountID||String(a.AccountID)===accountID)
+  .map(a=>{
+   const key=String(a.AccountID);
+   return {
+    code:a.AccountCode,
+    name:a.AccountName,
+    beginning:beginningByAccount[key]||0,
+    ending:running[key]||0
+   };
+  })
+  .filter(a=>a.beginning!==0||a.ending!==0||visible.some(r=>r.account===a.code));
+
+ renderStats(visible.length,debit,credit);
+ renderSummary(summaryRows,accountID,totalBeginning,totalEnding);
+ renderTable(reportRows);
+}
+
+function renderStats(count,debit,credit){
+ $("stats").innerHTML=`
+  <div class="stat"><span>Ledger Lines</span><b>${count}</b></div>
+  <div class="stat"><span>Debits</span><b>${money(debit)}</b></div>
+  <div class="stat"><span>Credits</span><b>${money(credit)}</b></div>
+ `;
+}
+
+function renderSummary(rows,accountID,beginning,ending){
+ if(accountID){
+  $("balanceSummary").innerHTML=`
+   <div class="balance-box">
+    <span>Beginning Balance</span>
+    <b>${money(beginning)}</b>
+   </div>
+   <div class="balance-box">
+    <span>Ending Balance</span>
+    <b>${money(ending)}</b>
+   </div>
+  `;
+  return;
+ }
+
+ $("balanceSummary").innerHTML=rows.map(r=>`
+  <div class="balance-box">
+   <span>${esc(r.code)} — ${esc(r.name)}</span>
+   <b>${money(r.ending)}</b>
+   <span>Beginning: ${money(r.beginning)}</span>
+  </div>
+ `).join("")||`<div class="empty">No account balances for this period.</div>`;
+}
+
+function renderTable(rows){
+ $("reportBody").innerHTML=rows.map(r=>`
+  <tr>
+   <td>${esc(r.date)}</td>
+   <td>${esc(r.journal)}</td>
+   <td>${esc(r.account)}</td>
+   <td>${esc(r.name)}</td>
+   <td>${esc(r.description)}</td>
+   <td class="right">${money(r.debit)}</td>
+   <td class="right">${money(r.credit)}</td>
+   <td class="right">${money(r.runningBalance)}</td>
+  </tr>
+ `).join("")||`<tr><td colspan="8" class="empty">No posted records found for the selected filters.</td></tr>`;
+}
+
+function exportCSV(){
+ const columns=[
+  "Date","Journal No.","Account","Account Name","Description",
+  "Debit","Credit","Running Balance"
+ ];
+
+ const rows=reportRows.map(r=>[
+  r.date,r.journal,r.account,r.name,r.description,
+  r.debit,r.credit,r.runningBalance
+ ]);
+
+ const csv=[columns,...rows].map(row=>
+  row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")
+ ).join("\r\n");
+
+ const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;
+ a.download="general-ledger.csv";
+ a.click();
+ URL.revokeObjectURL(url);
+}
+
+function applyFilters(){
+ try{
+  calculateReport();
+ }catch(e){
+  $("reportBody").innerHTML=`<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`;
+ }
+}
+
+$("applyBtn").addEventListener("click",applyFilters);
+$("accountFilter").addEventListener("change",applyFilters);
+$("fromDate").addEventListener("change",applyFilters);
+$("toDate").addEventListener("change",applyFilters);
+$("journalFilter").addEventListener("input",applyFilters);
+$("csvBtn").addEventListener("click",exportCSV);
+$("printBtn").addEventListener("click",()=>window.print());
+
+$("resetBtn").addEventListener("click",()=>{
+ $("accountFilter").value="";
+ $("fromDate").value="";
+ $("toDate").value="";
+ $("journalFilter").value="";
+ applyFilters();
+});
+
+async function init(){
+ try{
+  const result=await validateLicense();
+  if(!result?.valid)throw new Error(result?.message||"License validation failed.");
+
+  await readExcel();
+
+  company=(getSheet("CompanySetup")||[])[0]||{};
+  currency=company.Currency||"PHP";
+
+  $("company").textContent=company.CompanyName||"Mauccounting ERP System";
+  $("currency").textContent=currency;
+
+  accounts=getSheet("ChartOfAccounts")||[];
+
+  buildData();
+  renderAccountOptions();
+  calculateReport();
+
+ }catch(e){
+  console.error(e);
+  $("reportBody").innerHTML=`
+   <tr><td colspan="8">
+    <div class="error">
+     Unable to load report: ${esc(e.message)}
+     <br><small>Check license, Excel database connection, and worksheet names.</small>
+    </div>
+   </td></tr>
+  `;
+ }
+}
+
+init();
+</script>
+</body>
+</html>

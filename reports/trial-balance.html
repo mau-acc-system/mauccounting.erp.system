@@ -1,0 +1,401 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trial Balance | Mauccounting ERP System</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6fa;color:#202b3c;font:14px Arial,sans-serif;padding:26px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:20px}
+.muted{color:#8993a5;font-size:12px}
+.title{font-size:23px;font-weight:700;margin:5px 0}
+.actions{display:flex;gap:8px}
+button{border:1px solid #dce2ec;background:#fff;border-radius:7px;padding:9px 13px;cursor:pointer}
+.primary{background:#315efb;color:#fff;border-color:#315efb}
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0;align-items:end}
+.filters label{font-size:11px;color:#68758a;display:grid;gap:5px}
+input{padding:9px;border:1px solid #dce2ec;border-radius:6px;background:#fff;min-width:180px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0}
+.stat{background:#fff;border:1px solid #e8ecf2;border-radius:9px;padding:16px}
+.stat span{display:block;color:#8993a5;font-size:11px}
+.stat b{display:block;font-size:20px;margin-top:8px}
+.panel{background:#fff;border:1px solid #e8ecf2;border-radius:9px;padding:16px;margin-bottom:16px}
+.table-wrap{overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:700px}
+th,td{text-align:left;padding:11px 10px;border-bottom:1px solid #edf0f5;font-size:12px}
+th{background:#f8f9fc;color:#68758a;position:sticky;top:0}
+.right{text-align:right}
+.empty{text-align:center;color:#8993a5;padding:25px}
+.status{display:inline-block;padding:7px 12px;border-radius:20px;font-size:12px;font-weight:bold}
+.balanced{background:#e8f8ef;color:#16834b}
+.unbalanced{background:#fff0f0;color:#c03939}
+.note{font-size:11px;color:#8993a5;margin-top:12px}
+@media print{
+ body{padding:0;background:#fff}
+ .actions,.filters{display:none}
+ .panel,.stat{border:1px solid #ddd}
+}
+@media(max-width:600px){
+ body{padding:14px}
+ .head{display:block}
+ .actions{margin-top:12px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="head">
+ <div>
+  <div class="muted" id="company">Mauccounting ERP System</div>
+  <div class="title">Trial Balance</div>
+  <div class="muted">Currency: <span id="currency">PHP</span></div>
+ </div>
+ <div class="actions">
+  <button id="csvBtn">Export CSV</button>
+  <button id="printBtn" class="primary">Print</button>
+ </div>
+</div>
+
+<div class="filters">
+ <label>
+  As of Date
+  <input type="date" id="asOfDate">
+ </label>
+ <button id="applyBtn" class="primary">Apply Filter</button>
+ <button id="resetBtn">Reset</button>
+</div>
+
+<div id="stats" class="stats"></div>
+
+<section class="panel">
+ <h3>Trial Balance Summary</h3>
+ <div id="balanceStatus"></div>
+ <div class="note" id="balanceNote"></div>
+</section>
+
+<section class="panel">
+ <h3>Account Balances</h3>
+ <div class="table-wrap">
+  <table>
+   <thead>
+    <tr>
+     <th>Account Code</th>
+     <th>Account Name</th>
+     <th class="right">Debit Balance</th>
+     <th class="right">Credit Balance</th>
+    </tr>
+   </thead>
+   <tbody id="reportBody">
+    <tr><td colspan="4" class="empty">Loading report...</td></tr>
+   </tbody>
+   <tfoot id="reportFoot"></tfoot>
+  </table>
+ </div>
+ <div class="note">
+  Based on posted journal entries only. Draft journals are excluded.
+ </div>
+</section>
+
+<script type="module">
+import {
+ validateLicense,
+ readExcel,
+ getSheet
+} from "../excel.js";
+
+const $=id=>document.getElementById(id);
+
+let accounts=[];
+let journals=[];
+let lines=[];
+let company={};
+let currency="PHP";
+let reportRows=[];
+
+const num=v=>{
+ const n=Number(String(v??0).replace(/[,₱$ ]/g,""));
+ return Number.isFinite(n)?n:0;
+};
+
+const money=v=>new Intl.NumberFormat("en-PH",{
+ style:"currency",
+ currency:currency==="PHP"?"PHP":currency,
+ minimumFractionDigits:2
+}).format(num(v));
+
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({
+ "&":"&amp;",
+ "<":"&lt;",
+ ">":"&gt;",
+ '"':"&quot;",
+ "'":"&#39;"
+}[c]));
+
+function localToday(){
+ const d=new Date();
+ const y=d.getFullYear();
+ const m=String(d.getMonth()+1).padStart(2,"0");
+ const day=String(d.getDate()).padStart(2,"0");
+ return `${y}-${m}-${day}`;
+}
+
+function dateVal(v){
+ if(!v)return "";
+ if(v instanceof Date)return v.toISOString().slice(0,10);
+ const s=String(v);
+ if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+ const d=new Date(v);
+ return isNaN(d)?"":d.toISOString().slice(0,10);
+}
+
+function isActive(v){
+ return v===true ||
+  String(v).toLowerCase()==="true" ||
+  String(v)==="1" ||
+  String(v).toLowerCase()==="active";
+}
+
+function isPosted(v){
+ return String(v||"").trim().toLowerCase()==="posted";
+}
+
+function calculate(){
+ const asOf=$("asOfDate").value;
+
+ if(!asOf)throw new Error("Please select an As-of Date.");
+
+ const journalMap=Object.fromEntries(
+  journals.map(j=>[String(j.JournalID),j])
+ );
+
+ const accountMap=Object.fromEntries(
+  accounts.map(a=>[String(a.AccountID),a])
+ );
+
+ // Include active accounts and inactive accounts that have
+ // existing posted activity.
+ const usedAccounts=new Set(
+  lines
+   .filter(l=>{
+    const j=journalMap[String(l.JournalID)];
+    return j&&isPosted(j.Status)&&dateVal(j.JournalDate)<=asOf;
+   })
+   .map(l=>String(l.AccountID))
+ );
+
+ const selectedAccounts=accounts.filter(a=>
+  isActive(a.IsActive)||usedAccounts.has(String(a.AccountID))
+ );
+
+ const totals={};
+
+ selectedAccounts.forEach(a=>{
+  totals[String(a.AccountID)]={
+   code:a.AccountCode||"",
+   name:a.AccountName||"",
+   debit:0,
+   credit:0
+  };
+ });
+
+ lines.forEach(line=>{
+  const journal=journalMap[String(line.JournalID)];
+
+  if(!journal||!isPosted(journal.Status))return;
+
+  const journalDate=dateVal(journal.JournalDate);
+
+  if(!journalDate||journalDate>asOf)return;
+
+  const key=String(line.AccountID);
+  const account=accountMap[key];
+
+  if(!account)return;
+
+  if(!totals[key]){
+   totals[key]={
+    code:account.AccountCode||line.AccountCode||"",
+    name:account.AccountName||line.AccountName||"",
+    debit:0,
+    credit:0
+   };
+  }
+
+  totals[key].debit+=num(line.Debit);
+  totals[key].credit+=num(line.Credit);
+ });
+
+ // Convert net movement into standard debit/credit balances.
+ reportRows=Object.values(totals).map(a=>{
+  const net=Math.round((a.debit-a.credit)*100)/100;
+
+  return {
+   code:a.code,
+   name:a.name,
+   debitBalance:net>0?net:0,
+   creditBalance:net<0?Math.abs(net):0
+  };
+ }).sort((a,b)=>
+  String(a.code).localeCompare(String(b.code),undefined,{numeric:true})
+ );
+
+ render();
+}
+
+function render(){
+ const totalDebit=reportRows.reduce((s,r)=>s+r.debitBalance,0);
+ const totalCredit=reportRows.reduce((s,r)=>s+r.creditBalance,0);
+
+ const debit=Math.round(totalDebit*100)/100;
+ const credit=Math.round(totalCredit*100)/100;
+ const difference=Math.round((debit-credit)*100)/100;
+ const balanced=Math.abs(difference)<0.005;
+
+ $("stats").innerHTML=`
+  <div class="stat">
+   <span>Accounts</span>
+   <b>${reportRows.length}</b>
+  </div>
+  <div class="stat">
+   <span>Total Debit Balance</span>
+   <b>${money(debit)}</b>
+  </div>
+  <div class="stat">
+   <span>Total Credit Balance</span>
+   <b>${money(credit)}</b>
+  </div>
+ `;
+
+ $("balanceStatus").innerHTML=`
+  <span class="status ${balanced?"balanced":"unbalanced"}">
+   ${balanced?"BALANCED":"OUT OF BALANCE"}
+  </span>
+ `;
+
+ $("balanceNote").textContent=
+  `As of ${$("asOfDate").value} | Difference: ${money(difference)}`;
+
+ $("reportBody").innerHTML=reportRows.map(r=>`
+  <tr>
+   <td>${esc(r.code)}</td>
+   <td>${esc(r.name)}</td>
+   <td class="right">${money(r.debitBalance)}</td>
+   <td class="right">${money(r.creditBalance)}</td>
+  </tr>
+ `).join("")||`
+  <tr><td colspan="4" class="empty">No account records found.</td></tr>
+ `;
+
+ $("reportFoot").innerHTML=`
+  <tr>
+   <th colspan="2">TOTAL</th>
+   <th class="right">${money(debit)}</th>
+   <th class="right">${money(credit)}</th>
+  </tr>
+ `;
+}
+
+function exportCSV(){
+ const columns=[
+  "Account Code",
+  "Account Name",
+  "Debit Balance",
+  "Credit Balance"
+ ];
+
+ const rows=reportRows.map(r=>[
+  r.code,r.name,r.debitBalance,r.creditBalance
+ ]);
+
+ const totalDebit=reportRows.reduce((s,r)=>s+r.debitBalance,0);
+ const totalCredit=reportRows.reduce((s,r)=>s+r.creditBalance,0);
+
+ rows.push(["","TOTAL",totalDebit,totalCredit]);
+
+ const csv=[
+  ["TRIAL BALANCE"],
+  [company.CompanyName||"Mauccounting ERP System"],
+  ["As of Date",$("asOfDate").value],
+  [],
+  columns,
+  ...rows
+ ].map(row=>
+  row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")
+ ).join("\r\n");
+
+ const blob=new Blob(["\uFEFF"+csv],{
+  type:"text/csv;charset=utf-8"
+ });
+
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+
+ a.href=url;
+ a.download="trial-balance.csv";
+ a.click();
+
+ URL.revokeObjectURL(url);
+}
+
+$("applyBtn").addEventListener("click",()=>{
+ try{
+  calculate();
+ }catch(e){
+  alert(e.message);
+ }
+});
+
+$("resetBtn").addEventListener("click",()=>{
+ $("asOfDate").value=localToday();
+ calculate();
+});
+
+$("csvBtn").addEventListener("click",exportCSV);
+$("printBtn").addEventListener("click",()=>window.print());
+
+async function init(){
+ try{
+  const license=await validateLicense();
+
+  if(!license?.valid){
+   throw new Error(license?.message||"License validation failed.");
+  }
+
+  await readExcel();
+
+  company=(getSheet("CompanySetup")||[])[0]||{};
+  currency=company.Currency||"PHP";
+
+  $("company").textContent=company.CompanyName||"Mauccounting ERP System";
+  $("currency").textContent=currency;
+  $("asOfDate").value=localToday();
+
+  accounts=getSheet("ChartOfAccounts")||[];
+  journals=getSheet("JournalEntries")||[];
+  lines=getSheet("JournalEntryLines")||[];
+
+  calculate();
+
+ }catch(e){
+  console.error(e);
+  $("reportBody").innerHTML=`
+   <tr>
+    <td colspan="4">
+     <div style="padding:18px;background:#fff4f2;color:#a33;border-radius:8px">
+      Unable to load Trial Balance: ${esc(e.message)}
+     </div>
+    </td>
+   </tr>
+  `;
+ }
+}
+
+init();
+</script>
+</body>
+</html>

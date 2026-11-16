@@ -1,0 +1,592 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>User Access | Mauccounting ERP System</title>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 28px;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6fa;
+    color: #26364e;
+}
+
+.page-heading {
+    margin-bottom: 22px;
+}
+
+.page-heading h2 {
+    font-size: 23px;
+    margin: 0 0 7px;
+}
+
+.page-heading p {
+    font-size: 13px;
+    color: #8993a5;
+    margin: 0;
+}
+
+.panel {
+    background: white;
+    border: 1px solid #e5eaf1;
+    border-radius: 9px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.panel h3 {
+    font-size: 17px;
+    margin: 0 0 20px;
+}
+
+.user-select {
+    max-width: 420px;
+}
+
+label {
+    display: block;
+    font-size: 12px;
+    font-weight: bold;
+    color: #58677d;
+    margin-bottom: 8px;
+}
+
+select {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #dce2eb;
+    border-radius: 6px;
+    background: white;
+    font-size: 13px;
+    outline: none;
+}
+
+select:focus {
+    border-color: #315efb;
+}
+
+.user-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    margin-top: 18px;
+    padding: 15px;
+    background: #f7f9fc;
+    border-radius: 7px;
+    font-size: 12px;
+}
+
+.detail-label {
+    color: #8993a5;
+    margin-bottom: 5px;
+}
+
+.detail-value {
+    font-weight: bold;
+    color: #26364e;
+}
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.toolbar button,
+.save-button {
+    border: 1px solid #dce2eb;
+    background: #f8f9fc;
+    color: #40516b;
+    padding: 10px 17px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.toolbar button:hover {
+    background: #edf2fa;
+}
+
+.save-button {
+    background: #315efb;
+    color: white;
+    border-color: #315efb;
+    font-weight: bold;
+    padding: 12px 22px;
+}
+
+.save-button:hover {
+    background: #244bd2;
+}
+
+button:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+thead {
+    background: #f3f5f9;
+}
+
+th {
+    padding: 15px;
+    text-align: center;
+    font-size: 12px;
+    color: #65748b;
+}
+
+th:first-child {
+    text-align: left;
+}
+
+td {
+    padding: 17px 15px;
+    border-bottom: 1px solid #e9edf3;
+    text-align: center;
+    font-size: 13px;
+}
+
+td:first-child {
+    text-align: left;
+    font-weight: bold;
+}
+
+input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #315efb;
+}
+
+.status-message {
+    display: none;
+    padding: 12px 15px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 18px;
+}
+
+.status-message.success {
+    display: block;
+    background: #e8f8ef;
+    color: #16834b;
+}
+
+.status-message.error {
+    display: block;
+    background: #fff0f0;
+    color: #c03939;
+}
+
+.bottom-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 22px;
+}
+
+.loading {
+    color: #8993a5;
+    font-size: 13px;
+    padding: 20px 0;
+}
+
+@media(max-width: 600px) {
+    body {
+        padding: 16px;
+    }
+
+    .panel {
+        padding: 17px;
+    }
+
+    .user-details {
+        gap: 16px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="page-heading">
+    <h2>User Access</h2>
+    <p>Manage module permissions for each system user.</p>
+</div>
+
+<div id="statusMessage" class="status-message"></div>
+
+<div class="panel">
+    <h3>Select User</h3>
+
+    <div class="user-select">
+        <label for="userSelect">User Account</label>
+        <select id="userSelect" disabled>
+            <option value="">Loading users...</option>
+        </select>
+    </div>
+
+    <div class="user-details" id="userDetails" style="display:none;">
+        <div>
+            <div class="detail-label">Username</div>
+            <div class="detail-value" id="detailUsername">-</div>
+        </div>
+
+        <div>
+            <div class="detail-label">Display Name</div>
+            <div class="detail-value" id="detailName">-</div>
+        </div>
+
+        <div>
+            <div class="detail-label">Role</div>
+            <div class="detail-value" id="detailRole">-</div>
+        </div>
+
+        <div>
+            <div class="detail-label">Status</div>
+            <div class="detail-value" id="detailStatus">-</div>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <h3>Module Permissions</h3>
+
+    <div class="toolbar">
+        <button type="button" id="selectAll">Select All</button>
+        <button type="button" id="clearAll">Clear All</button>
+        <button type="button" id="viewOnly">View Only</button>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>View</th>
+                    <th>Create</th>
+                    <th>Edit</th>
+                    <th>Delete</th>
+                    <th>Approve</th>
+                </tr>
+            </thead>
+
+            <tbody id="permissionBody">
+                <tr>
+                    <td colspan="6" class="loading">Loading permissions...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="bottom-actions">
+        <button type="button" class="save-button" id="saveButton" disabled>
+            Save Permissions
+        </button>
+    </div>
+</div>
+
+<script type="module">
+import {
+    validateLicense,
+    readExcel,
+    getSheet,
+    deleteRecord,
+    addRecord,
+    saveExcel
+} from "../excel.js";
+
+const session = JSON.parse(
+    sessionStorage.getItem("accsystem_session") || "null"
+);
+
+if (!session) {
+    window.top.location.href = "../login.html";
+}
+
+if (!session || session.Role !== "Administrator") {
+    document.body.innerHTML =
+        "<h2>Access Denied</h2><p>Administrator access is required.</p>";
+    throw new Error("Unauthorized access");
+}
+
+const modules = [
+    "Dashboard",
+    "Banks",
+    "Cash",
+    "Accounts Receivable",
+    "Accounts Payable",
+    "General Ledger",
+    "Inventory",
+    "Reports",
+    "Setup"
+];
+
+const permissionFields = [
+    "CanView",
+    "CanCreate",
+    "CanEdit",
+    "CanDelete",
+    "CanApprove"
+];
+
+let users = [];
+let userAccess = [];
+let selectedUser = null;
+let databaseReady = false;
+
+const userSelect = document.getElementById("userSelect");
+const permissionBody = document.getElementById("permissionBody");
+const saveButton = document.getElementById("saveButton");
+const statusMessage = document.getElementById("statusMessage");
+
+function showMessage(message, type) {
+    statusMessage.textContent = message;
+    statusMessage.className = "status-message " + type;
+}
+
+function hideMessage() {
+    statusMessage.textContent = "";
+    statusMessage.className = "status-message";
+}
+
+function isTrue(value) {
+    return value === true ||
+        String(value).toLowerCase() === "true" ||
+        String(value) === "1";
+}
+
+function initializeTable() {
+    permissionBody.innerHTML = "";
+
+    modules.forEach(module => {
+        const row = document.createElement("tr");
+        const nameCell = document.createElement("td");
+
+        nameCell.textContent = module;
+        row.appendChild(nameCell);
+
+        permissionFields.forEach(field => {
+            const cell = document.createElement("td");
+            const checkbox = document.createElement("input");
+
+            checkbox.type = "checkbox";
+            checkbox.dataset.module = module;
+            checkbox.dataset.permission = field;
+
+            cell.appendChild(checkbox);
+            row.appendChild(cell);
+        });
+
+        permissionBody.appendChild(row);
+    });
+}
+
+function loadUserPermissions() {
+    hideMessage();
+
+    const userID = userSelect.value;
+    selectedUser = users.find(user => String(user.UserID) === userID);
+
+    if (!selectedUser) {
+        document.getElementById("userDetails").style.display = "none";
+        saveButton.disabled = true;
+        return;
+    }
+
+    document.getElementById("userDetails").style.display = "flex";
+    document.getElementById("detailUsername").textContent =
+        selectedUser.Username || "-";
+    document.getElementById("detailName").textContent =
+        selectedUser.DisplayName || "-";
+    document.getElementById("detailRole").textContent =
+        selectedUser.Role || "-";
+    document.getElementById("detailStatus").textContent =
+        isTrue(selectedUser.IsActive) ? "Active" : "Inactive";
+
+    const records = userAccess.filter(
+        row => String(row.UserID) === String(selectedUser.UserID)
+    );
+
+    permissionBody.querySelectorAll("input[type=checkbox]").forEach(box => {
+        const record = records.find(
+            row => row.Module === box.dataset.module
+        );
+
+        box.checked = record
+            ? isTrue(record[box.dataset.permission])
+            : false;
+    });
+
+    saveButton.disabled = false;
+}
+
+function setAllPermissions(view, create, edit, remove, approve) {
+    permissionBody.querySelectorAll("input[type=checkbox]").forEach(box => {
+        const permission = box.dataset.permission;
+
+        const values = {
+            CanView: view,
+            CanCreate: create,
+            CanEdit: edit,
+            CanDelete: remove,
+            CanApprove: approve
+        };
+
+        box.checked = values[permission];
+    });
+}
+
+document.getElementById("selectAll").addEventListener("click", () => {
+    setAllPermissions(true, true, true, true, true);
+});
+
+document.getElementById("clearAll").addEventListener("click", () => {
+    setAllPermissions(false, false, false, false, false);
+});
+
+document.getElementById("viewOnly").addEventListener("click", () => {
+    setAllPermissions(true, false, false, false, false);
+});
+
+userSelect.addEventListener("change", loadUserPermissions);
+
+saveButton.addEventListener("click", async () => {
+    hideMessage();
+
+    if (!selectedUser || !databaseReady) {
+        showMessage("Please select a user first.", "error");
+        return;
+    }
+
+    saveButton.disabled = true;
+    saveButton.textContent = "Saving...";
+
+    try {
+        // Remove previous permissions for this user.
+        try {
+            deleteRecord(
+                "UserAccess",
+                "UserID",
+                selectedUser.UserID
+            );
+        } catch (error) {
+            // No previous permission rows is allowed.
+        }
+
+        // Save all module permission rows.
+        for (const module of modules) {
+            const record = {
+                UserID: selectedUser.UserID,
+                Module: module,
+                Page: module
+            };
+
+            permissionFields.forEach(field => {
+                const checkbox = permissionBody.querySelector(
+                    `input[data-module="${module}"][data-permission="${field}"]`
+                );
+
+                record[field] = checkbox ? checkbox.checked : false;
+            });
+
+            addRecord("UserAccess", record);
+        }
+
+        await saveExcel();
+
+        userAccess = (getSheet("UserAccess") || []);
+        showMessage(
+            "Permissions successfully saved for " +
+            selectedUser.Username + ".",
+            "success"
+        );
+
+    } catch (error) {
+        showMessage(
+            "Unable to save permissions: " + error.message,
+            "error"
+        );
+    } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = "Save Permissions";
+    }
+});
+
+async function initialize() {
+    try {
+        const license = await validateLicense();
+
+        if (!license.valid) {
+            throw new Error(license.message || "License validation failed.");
+        }
+
+        await readExcel();
+
+        users = getSheet("Users") || [];
+        userAccess = getSheet("UserAccess") || [];
+
+        userSelect.innerHTML = '<option value="">Select a user</option>';
+
+        users.forEach(user => {
+            const option = document.createElement("option");
+            option.value = user.UserID;
+            option.textContent =
+                (user.DisplayName || user.Username) +
+                " (" + user.Username + ")";
+
+            userSelect.appendChild(option);
+        });
+
+        initializeTable();
+
+        userSelect.disabled = false;
+        databaseReady = true;
+
+        const administrator = users.find(
+            user => user.Role === "Administrator"
+        );
+
+        if (administrator) {
+            userSelect.value = administrator.UserID;
+            loadUserPermissions();
+        }
+
+    } catch (error) {
+        showMessage(
+            "Database connection failed: " + error.message,
+            "error"
+        );
+
+        permissionBody.innerHTML =
+            '<tr><td colspan="6">Unable to load permissions.</td></tr>';
+    }
+}
+
+initialize();
+</script>
+
+</body>
+</html>

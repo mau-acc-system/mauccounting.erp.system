@@ -1,0 +1,772 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Costing Report | Mauccounting ERP System</title>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px;font-family:Arial,Helvetica,sans-serif;background:#f4f6fa;color:#26364e}
+.heading{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:22px}
+.heading h2{margin:0 0 7px;font-size:23px}
+.heading p{margin:0;color:#8993a5;font-size:13px}
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+button{cursor:pointer;font-family:inherit}
+.btn{border:0;border-radius:6px;padding:10px 16px;font-size:12px;font-weight:bold}
+.primary{background:#315efb;color:white}
+.secondary{background:white;border:1px solid #dce2eb;color:#536176}
+.filters{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr)) auto;gap:12px;align-items:end;background:white;border:1px solid #e8ecf2;border-radius:10px;padding:18px;margin-bottom:18px}
+.field{display:flex;flex-direction:column;gap:7px}
+label{font-size:11px;font-weight:bold;color:#536176}
+input,select{width:100%;height:39px;border:1px solid #dce2eb;border-radius:6px;padding:8px 10px;font-size:12px;color:#26364e;background:white}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:18px}
+.stat{background:white;border:1px solid #e8ecf2;border-radius:9px;padding:17px}
+.stat-label{font-size:11px;color:#8993a5}
+.stat-value{font-size:21px;font-weight:bold;margin-top:9px;overflow-wrap:anywhere}
+.panel{background:white;border:1px solid #e8ecf2;border-radius:10px;padding:20px;margin-bottom:18px}
+.panel-header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+.panel-header h3{font-size:15px;margin:0}
+.method{font-size:11px;color:#65748b}
+.table-wrap{overflow-x:auto}
+table{width:100%;min-width:1050px;border-collapse:collapse}
+thead{background:#f3f5f9}
+th{padding:12px 10px;text-align:right;font-size:10px;color:#65748b;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td{padding:12px 10px;border-bottom:1px solid #edf0f5;text-align:right;font-size:11px;white-space:nowrap}
+tbody tr:hover td{background:#fafbfe}
+tfoot td{font-weight:bold;background:#f3f5f9;border-top:2px solid #dce2eb}
+.empty{text-align:center!important;padding:35px;color:#8993a5}
+.message{display:none;padding:12px 14px;border-radius:6px;font-size:12px;margin-bottom:16px}
+.message.error{display:block;background:#fff0f0;color:#c03939}
+.note{font-size:11px;color:#8993a5;line-height:1.6;margin-top:12px}
+@media(max-width:950px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:550px){body{padding:15px}.filters{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:13px}}
+@media print{body{padding:0;background:white}.heading .actions,.filters,.message{display:none!important}.panel,.stat{break-inside:avoid}}
+</style>
+</head>
+
+<body>
+
+<div class="heading">
+    <div>
+        <h2>Inventory Costing Report</h2>
+        <p>Inventory valuation and cost of goods issued by costing method.</p>
+    </div>
+    <div class="actions">
+        <button class="btn secondary" id="exportButton">Export CSV</button>
+        <button class="btn primary" id="printButton">Print Report</button>
+    </div>
+</div>
+
+<div id="message" class="message"></div>
+
+<div class="filters">
+    <div class="field">
+        <label for="fromDate">FROM DATE</label>
+        <input type="date" id="fromDate">
+    </div>
+    <div class="field">
+        <label for="toDate">TO DATE</label>
+        <input type="date" id="toDate">
+    </div>
+    <div class="field">
+        <label for="itemFilter">INVENTORY ITEM</label>
+        <select id="itemFilter"><option value="">All Inventory Items</option></select>
+    </div>
+    <div class="field">
+        <label for="searchInput">SEARCH</label>
+        <input type="search" id="searchInput" placeholder="Search item code or name">
+    </div>
+    <button class="btn primary" id="generateButton">Generate Report</button>
+</div>
+
+<div class="stats">
+    <div class="stat">
+        <div class="stat-label">Ending Inventory Quantity</div>
+        <div class="stat-value" id="totalQuantity">0</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Ending Inventory Value</div>
+        <div class="stat-value" id="totalValue">₱0.00</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Stock Out Quantity</div>
+        <div class="stat-value" id="totalOut">0</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Cost of Goods Issued</div>
+        <div class="stat-value" id="totalCOGS">₱0.00</div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <h3>Inventory Valuation Details</h3>
+        <div class="method" id="methodLabel">Costing Method: Loading...</div>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Code</th>
+                    <th>Item Name</th>
+                    <th>Opening Qty</th>
+                    <th>Opening Value</th>
+                    <th>Stock In Qty</th>
+                    <th>Stock In Value</th>
+                    <th>Stock Out Qty</th>
+                    <th>Cost of Stock Out</th>
+                    <th>Ending Qty</th>
+                    <th>Ending Unit Cost</th>
+                    <th>Ending Value</th>
+                </tr>
+            </thead>
+            <tbody id="reportTable">
+                <tr><td colspan="11" class="empty">Loading report...</td></tr>
+            </tbody>
+            <tfoot id="reportFooter"></tfoot>
+        </table>
+    </div>
+
+    <div class="note">
+        Opening balances are calculated from transactions before the selected From Date.
+        Stock In and Stock Out totals cover the selected reporting period.
+        Ending inventory is valued using the selected costing method.
+    </div>
+</div>
+
+<script type="module">
+import {
+    validateLicense,
+    readExcel,
+    getSheet
+} from "../excel.js";
+
+const session = JSON.parse(
+    sessionStorage.getItem("accsystem_session") || "null"
+);
+
+if (!session) {
+    window.top.location.href = "../login.html";
+    throw new Error("No active session");
+}
+
+const userAccess = session.Access || [];
+const isAdmin =
+    String(session.Role || "").toLowerCase() === "administrator";
+
+const canView = isAdmin || userAccess.some(row =>
+    String(row.Module).trim() === "Reports" &&
+    (
+        row.CanView === true ||
+        String(row.CanView).toLowerCase() === "true" ||
+        String(row.CanView) === "1"
+    )
+);
+
+if (!canView) {
+    document.body.innerHTML =
+        "<h2>Access Denied</h2><p>You do not have permission to view Reports.</p>";
+    throw new Error("Insufficient permissions");
+}
+
+const $ = id => document.getElementById(id);
+
+const reportTable = $("reportTable");
+const reportFooter = $("reportFooter");
+const message = $("message");
+
+let items = [];
+let movements = [];
+let reportRows = [];
+let costingMethod = "FIFO";
+let companyCurrency = "PHP";
+
+const EPSILON = 0.0000001;
+
+function numberValue(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function formatNumber(value) {
+    return numberValue(value).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4
+    });
+}
+
+function formatMoney(value) {
+    return numberValue(value).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+}
+
+function isActive(value) {
+    return value === true ||
+        String(value).toLowerCase() === "true" ||
+        String(value) === "1" ||
+        String(value).toLowerCase() === "yes";
+}
+
+function formatDate(value) {
+    if (!value) return "";
+
+    if (typeof value === "number") {
+        const date = new Date((value - 25569) * 86400000);
+        return isNaN(date) ? "" : date.toISOString().slice(0, 10);
+    }
+
+    return String(value).slice(0, 10);
+}
+
+function getLocalDate() {
+    const today = new Date();
+    return new Date(
+        today.getTime() - today.getTimezoneOffset() * 60000
+    ).toISOString().slice(0, 10);
+}
+
+function showError(text) {
+    message.textContent = text;
+    message.className = "message error";
+}
+
+function hideMessage() {
+    message.textContent = "";
+    message.className = "message";
+}
+
+/* TRANSACTION ORDER */
+
+function movementOrder(a, b) {
+    const dateCompare = formatDate(a.TransactionDate)
+        .localeCompare(formatDate(b.TransactionDate));
+
+    if (dateCompare !== 0) return dateCompare;
+
+    const noCompare = String(a.TransactionNo || "")
+        .localeCompare(String(b.TransactionNo || ""), undefined, {
+            numeric: true
+        });
+
+    if (noCompare !== 0) return noCompare;
+
+    return String(a.TransactionID || "").localeCompare(
+        String(b.TransactionID || ""),
+        undefined,
+        { numeric: true }
+    );
+}
+
+/* INVENTORY COSTING ENGINE */
+
+function createInventoryState() {
+    return {
+        layers: [],
+        quantity: 0,
+        value: 0
+    };
+}
+
+function getStateQuantity(state) {
+    if (costingMethod === "WA") {
+        return state.quantity;
+    }
+
+    return state.layers.reduce(
+        (sum, layer) => sum + layer.remaining,
+        0
+    );
+}
+
+function getStateValue(state) {
+    if (costingMethod === "WA") {
+        return state.value;
+    }
+
+    return state.layers.reduce(
+        (sum, layer) => sum + layer.remaining * layer.unitCost,
+        0
+    );
+}
+
+function addInventory(state, quantity, unitCost) {
+    if (quantity <= 0) return;
+
+    if (costingMethod === "WA") {
+        state.value += quantity * unitCost;
+        state.quantity += quantity;
+    } else {
+        state.layers.push({
+            remaining: quantity,
+            unitCost
+        });
+    }
+}
+
+function issueInventory(state, quantity, transactionNo) {
+    const available = getStateQuantity(state);
+
+    if (quantity > available + EPSILON) {
+        throw new Error(
+            `Insufficient stock at ${transactionNo || "an inventory transaction"}. ` +
+            `Available: ${formatNumber(available)}. Required: ${formatNumber(quantity)}.`
+        );
+    }
+
+    if (quantity <= 0) return 0;
+
+    if (costingMethod === "WA") {
+        const averageCost = state.quantity > 0
+            ? state.value / state.quantity
+            : 0;
+
+        const issueCost = quantity * averageCost;
+
+        state.quantity -= quantity;
+        state.value -= issueCost;
+
+        if (state.quantity < EPSILON) {
+            state.quantity = 0;
+            state.value = 0;
+        }
+
+        return issueCost;
+    }
+
+    let remaining = quantity;
+    let issueCost = 0;
+
+    const orderedLayers = costingMethod === "LIFO"
+        ? [...state.layers].reverse()
+        : state.layers;
+
+    for (const layer of orderedLayers) {
+        if (remaining <= EPSILON) break;
+
+        const used = Math.min(layer.remaining, remaining);
+
+        issueCost += used * layer.unitCost;
+        layer.remaining -= used;
+        remaining -= used;
+    }
+
+    state.layers = state.layers.filter(
+        layer => layer.remaining > EPSILON
+    );
+
+    return issueCost;
+}
+
+/* BUILD ITEM REPORT */
+
+function buildItemReport(item, fromDate, toDate) {
+    const ledger = movements
+        .filter(m =>
+            String(m.ItemID) === String(item.ItemID) &&
+            formatDate(m.TransactionDate) <= toDate
+        )
+        .slice()
+        .sort(movementOrder);
+
+    const state = createInventoryState();
+
+    const result = {
+        itemID: item.ItemID,
+        itemCode: item.ItemCode || item.ItemID,
+        itemName: item.ItemName || "",
+        openingQuantity: 0,
+        openingValue: 0,
+        stockInQuantity: 0,
+        stockInValue: 0,
+        stockOutQuantity: 0,
+        stockOutCost: 0,
+        endingQuantity: 0,
+        endingValue: 0,
+        endingUnitCost: 0
+    };
+
+    for (const movement of ledger) {
+        const date = formatDate(movement.TransactionDate);
+        const qtyIn = numberValue(movement.QuantityIn);
+        const qtyOut = numberValue(movement.QuantityOut);
+        const unitCost = numberValue(movement.UnitCost);
+
+        const isInPeriod = date >= fromDate && date <= toDate;
+
+        if (qtyIn > 0) {
+            if (unitCost < 0) {
+                throw new Error(
+                    `Negative unit cost in ${movement.TransactionNo || movement.TransactionID}.`
+                );
+            }
+
+            addInventory(state, qtyIn, unitCost);
+
+            if (isInPeriod) {
+                result.stockInQuantity += qtyIn;
+                result.stockInValue += qtyIn * unitCost;
+            }
+        }
+
+        if (qtyOut > 0) {
+            const issueCost = issueInventory(
+                state,
+                qtyOut,
+                movement.TransactionNo || movement.TransactionID
+            );
+
+            if (isInPeriod) {
+                result.stockOutQuantity += qtyOut;
+                result.stockOutCost += issueCost;
+            }
+        }
+
+        if (date < fromDate) {
+            result.openingQuantity = getStateQuantity(state);
+            result.openingValue = getStateValue(state);
+        }
+    }
+
+    result.endingQuantity = getStateQuantity(state);
+    result.endingValue = getStateValue(state);
+
+    result.endingUnitCost = result.endingQuantity > EPSILON
+        ? result.endingValue / result.endingQuantity
+        : 0;
+
+    return result;
+}
+
+/* GENERATE REPORT */
+
+function generateReport() {
+    hideMessage();
+
+    const fromDate = $("fromDate").value;
+    const toDate = $("toDate").value;
+    const selectedItem = $("itemFilter").value;
+    const search = $("searchInput").value.trim().toLowerCase();
+
+    if (!fromDate || !toDate) {
+        showError("Please select both From Date and To Date.");
+        return;
+    }
+
+    if (fromDate > toDate) {
+        showError("From Date cannot be later than To Date.");
+        return;
+    }
+
+    try {
+        let selectedItems = items.filter(item =>
+            !selectedItem ||
+            String(item.ItemID) === String(selectedItem)
+        );
+
+        selectedItems = selectedItems.filter(item => {
+            const searchable = [
+                item.ItemCode,
+                item.ItemName,
+                item.Description
+            ].join(" ").toLowerCase();
+
+            return searchable.includes(search);
+        });
+
+        reportRows = selectedItems.map(item =>
+            buildItemReport(item, fromDate, toDate)
+        );
+
+        renderReport();
+
+    } catch (error) {
+        reportRows = [];
+        renderReport();
+        showError(
+            "Unable to calculate inventory costing: " + error.message
+        );
+    }
+}
+
+/* RENDER */
+
+function renderReport() {
+    reportTable.innerHTML = "";
+    reportFooter.innerHTML = "";
+
+    if (!reportRows.length) {
+        reportTable.innerHTML =
+            '<tr><td colspan="11" class="empty">No inventory records found.</td></tr>';
+
+        updateSummary();
+        return;
+    }
+
+    reportRows.forEach(row => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+            <td>${escapeHTML(row.itemCode)}</td>
+            <td>${escapeHTML(row.itemName)}</td>
+            <td>${formatNumber(row.openingQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(row.openingValue)}</td>
+            <td>${formatNumber(row.stockInQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(row.stockInValue)}</td>
+            <td>${formatNumber(row.stockOutQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(row.stockOutCost)}</td>
+            <td>${formatNumber(row.endingQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(row.endingUnitCost)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(row.endingValue)}</td>
+        `;
+
+        reportTable.appendChild(tr);
+    });
+
+    const totals = reportRows.reduce((sum, row) => {
+        for (const key of [
+            "openingQuantity",
+            "openingValue",
+            "stockInQuantity",
+            "stockInValue",
+            "stockOutQuantity",
+            "stockOutCost",
+            "endingQuantity",
+            "endingValue"
+        ]) {
+            sum[key] += numberValue(row[key]);
+        }
+
+        return sum;
+    }, {
+        openingQuantity: 0,
+        openingValue: 0,
+        stockInQuantity: 0,
+        stockInValue: 0,
+        stockOutQuantity: 0,
+        stockOutCost: 0,
+        endingQuantity: 0,
+        endingValue: 0
+    });
+
+    const totalUnitCost = totals.endingQuantity > EPSILON
+        ? totals.endingValue / totals.endingQuantity
+        : 0;
+
+    reportFooter.innerHTML = `
+        <tr>
+            <td colspan="2">TOTAL</td>
+            <td>${formatNumber(totals.openingQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(totals.openingValue)}</td>
+            <td>${formatNumber(totals.stockInQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(totals.stockInValue)}</td>
+            <td>${formatNumber(totals.stockOutQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(totals.stockOutCost)}</td>
+            <td>${formatNumber(totals.endingQuantity)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(totalUnitCost)}</td>
+            <td>${escapeHTML(companyCurrency)} ${formatMoney(totals.endingValue)}</td>
+        </tr>
+    `;
+
+    updateSummary();
+}
+
+function updateSummary() {
+    const totalQuantity = reportRows.reduce(
+        (sum, row) => sum + row.endingQuantity, 0
+    );
+
+    const totalValue = reportRows.reduce(
+        (sum, row) => sum + row.endingValue, 0
+    );
+
+    const totalOut = reportRows.reduce(
+        (sum, row) => sum + row.stockOutQuantity, 0
+    );
+
+    const totalCOGS = reportRows.reduce(
+        (sum, row) => sum + row.stockOutCost, 0
+    );
+
+    $("totalQuantity").textContent = formatNumber(totalQuantity);
+    $("totalValue").textContent =
+        companyCurrency + " " + formatMoney(totalValue);
+    $("totalOut").textContent = formatNumber(totalOut);
+    $("totalCOGS").textContent =
+        companyCurrency + " " + formatMoney(totalCOGS);
+}
+
+/* EXPORT CSV */
+
+function exportCSV() {
+    if (!reportRows.length) {
+        showError("Generate a report before exporting.");
+        return;
+    }
+
+    const headers = [
+        "Item Code",
+        "Item Name",
+        "Opening Quantity",
+        "Opening Value",
+        "Stock In Quantity",
+        "Stock In Value",
+        "Stock Out Quantity",
+        "Cost of Stock Out",
+        "Ending Quantity",
+        "Ending Unit Cost",
+        "Ending Inventory Value"
+    ];
+
+    const data = reportRows.map(row => [
+        row.itemCode,
+        row.itemName,
+        row.openingQuantity,
+        row.openingValue,
+        row.stockInQuantity,
+        row.stockInValue,
+        row.stockOutQuantity,
+        row.stockOutCost,
+        row.endingQuantity,
+        row.endingUnitCost,
+        row.endingValue
+    ]);
+
+    const escapeCSV = value =>
+        '"' + String(value ?? "").replace(/"/g, '""') + '"';
+
+    const csv = [
+        headers,
+        ...data
+    ].map(row => row.map(escapeCSV).join(",")).join("\r\n");
+
+    const blob = new Blob(
+        ["\uFEFF" + csv],
+        { type: "text/csv;charset=utf-8;" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download =
+        `Inventory-Costing-${$("fromDate").value}-to-${$("toDate").value}.csv`;
+
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+/* INITIALIZE */
+
+function populateItems() {
+    const select = $("itemFilter");
+
+    select.innerHTML =
+        '<option value="">All Inventory Items</option>';
+
+    items.forEach(item => {
+        const option = document.createElement("option");
+
+        option.value = item.ItemID;
+        option.textContent =
+            `${item.ItemCode || item.ItemID} - ${item.ItemName || ""}`;
+
+        select.appendChild(option);
+    });
+}
+
+async function initialize() {
+    try {
+        if (typeof window.XLSX === "undefined") {
+            throw new Error("SheetJS library is not loaded. Check your internet connection.");
+        }
+
+        const license = await validateLicense();
+
+        if (!license.valid) {
+            throw new Error(
+                license.message || "License validation failed."
+            );
+        }
+
+        await readExcel();
+
+        const companySetup = getSheet("CompanySetup") || [];
+
+        const company = companySetup.find(
+            row => String(row.CompanyID) === "C001"
+        );
+
+        costingMethod = ["FIFO", "WA", "LIFO"].includes(
+            company?.InventoryCostingMethod
+        )
+            ? company.InventoryCostingMethod
+            : "FIFO";
+
+        companyCurrency = company?.Currency || "PHP";
+
+        items = (getSheet("Items") || []).filter(item =>
+            isActive(item.IsActive) &&
+            String(item.ItemType || "").toLowerCase() === "inventory"
+        );
+
+        movements = getSheet("InventoryTransactions") || [];
+
+        populateItems();
+
+        $("methodLabel").textContent =
+            "Costing Method: " +
+            (costingMethod === "WA"
+                ? "Moving Weighted Average"
+                : costingMethod);
+
+        const today = getLocalDate();
+
+        $("fromDate").value = today.slice(0, 4) + "-01-01";
+        $("toDate").value = today;
+
+        generateReport();
+
+    } catch (error) {
+        reportTable.innerHTML =
+            '<tr><td colspan="11" class="empty">Unable to load report.</td></tr>';
+
+        showError(
+            "Database connection failed: " + error.message
+        );
+    }
+}
+
+/* EVENTS */
+
+$("generateButton").addEventListener("click", generateReport);
+$("searchInput").addEventListener("input", generateReport);
+$("itemFilter").addEventListener("change", generateReport);
+$("exportButton").addEventListener("click", exportCSV);
+
+$("printButton").addEventListener("click", () => {
+    window.print();
+});
+
+initialize();
+</script>
+
+</body>
+</html>

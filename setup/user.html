@@ -1,0 +1,448 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create User | Mauccounting ERP System</title>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 28px;
+    font-family: Arial, sans-serif;
+    background: #f4f6fa;
+    color: #202b3c;
+}
+
+.page-title {
+    margin-bottom: 24px;
+}
+
+.page-title h2 {
+    margin: 0 0 7px;
+    font-size: 23px;
+}
+
+.page-title p {
+    margin: 0;
+    color: #8993a5;
+    font-size: 13px;
+}
+
+.card {
+    background: white;
+    border: 1px solid #e8ecf2;
+    border-radius: 10px;
+    padding: 25px;
+    max-width: 850px;
+}
+
+.card h3 {
+    font-size: 16px;
+    margin: 0 0 22px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 19px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.field.full {
+    grid-column: 1 / -1;
+}
+
+label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #536176;
+}
+
+input, select {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #dce2eb;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    background: white;
+}
+
+input:focus, select:focus {
+    border-color: #315efb;
+    box-shadow: 0 0 0 3px rgba(49,94,251,.08);
+}
+
+.password-wrap {
+    position: relative;
+}
+
+.password-wrap input {
+    padding-right: 75px;
+}
+
+.show-password {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: none;
+    color: #315efb;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.hint {
+    color: #8993a5;
+    font-size: 11px;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #edf0f5;
+}
+
+button.action {
+    border: 0;
+    border-radius: 6px;
+    padding: 11px 19px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.save {
+    background: #315efb;
+    color: white;
+}
+
+.save:hover {
+    background: #244bd2;
+}
+
+.clear {
+    background: #edf0f5;
+    color: #536176;
+}
+
+button:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.message {
+    display: none;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 20px;
+}
+
+.message.success {
+    display: block;
+    background: #e8f8ef;
+    color: #16834b;
+}
+
+.message.error {
+    display: block;
+    background: #fff0f0;
+    color: #c03939;
+}
+
+@media(max-width: 600px) {
+    body { padding: 17px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .field.full { grid-column: auto; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="page-title">
+    <h2>Create User</h2>
+    <p>Create and register a new Mauccounting ERP System user account.</p>
+</div>
+
+<div class="card">
+
+    <h3>User Information</h3>
+
+    <div id="message" class="message"></div>
+
+    <form id="userForm">
+
+        <div class="form-grid">
+
+            <div class="field">
+                <label for="displayName">Display Name</label>
+                <input type="text" id="displayName" required
+                       placeholder="Enter full name">
+            </div>
+
+            <div class="field">
+                <label for="username">Username</label>
+                <input type="text" id="username" required
+                       placeholder="Enter username"
+                       autocomplete="off">
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <div class="password-wrap">
+                    <input type="password" id="password" required
+                           minlength="8" placeholder="Minimum 8 characters"
+                           autocomplete="new-password">
+                    <button type="button" class="show-password"
+                            onclick="togglePassword('password',this)">
+                        Show
+                    </button>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="confirmPassword">Confirm Password</label>
+                <div class="password-wrap">
+                    <input type="password" id="confirmPassword" required
+                           minlength="8" placeholder="Re-enter password"
+                           autocomplete="new-password">
+                    <button type="button" class="show-password"
+                            onclick="togglePassword('confirmPassword',this)">
+                        Show
+                    </button>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="role">User Role</label>
+                <select id="role" required>
+                    <option value="User">User</option>
+                    <option value="Administrator">Administrator</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="status">Account Status</label>
+                <select id="status" required>
+                    <option value="TRUE">Active</option>
+                    <option value="FALSE">Inactive</option>
+                </select>
+            </div>
+
+            <div class="field full">
+                <div class="hint">
+                    New accounts will have no module permissions until configured in User Access.
+                </div>
+            </div>
+
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="action save" id="saveButton">
+                Create User
+            </button>
+
+            <button type="reset" class="action clear">
+                Clear Form
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+<script type="module">
+import {
+    validateLicense,
+    readExcel,
+    getSheet,
+    addRecord,
+    saveExcel
+} from "../excel.js";
+
+const session = JSON.parse(
+    sessionStorage.getItem("accsystem_session") || "null"
+);
+
+if (!session) {
+    window.top.location.href = "../login.html";
+}
+
+if (!session || session.Role !== "Administrator") {
+    document.body.innerHTML =
+        "<h3>Access Denied</h3><p>Administrator access is required.</p>";
+    throw new Error("Unauthorized access");
+}
+
+let databaseReady = false;
+
+const form = document.getElementById("userForm");
+const message = document.getElementById("message");
+const saveButton = document.getElementById("saveButton");
+
+function showMessage(text, type) {
+    message.textContent = text;
+    message.className = "message " + type;
+}
+
+function hideMessage() {
+    message.textContent = "";
+    message.className = "message";
+}
+
+async function initialize() {
+    try {
+        const license = await validateLicense();
+
+        if (!license.valid) {
+            throw new Error(license.message || "License validation failed.");
+        }
+
+        await readExcel();
+        databaseReady = true;
+
+    } catch (error) {
+        showMessage("Database connection failed: " + error.message, "error");
+    }
+}
+
+function generateUserID(users) {
+    let highest = 0;
+
+    users.forEach(user => {
+        const match = String(user.UserID || "").match(/^U(\d+)$/i);
+
+        if (match) {
+            highest = Math.max(highest, Number(match[1]));
+        }
+    });
+
+    return "U" + String(highest + 1).padStart(3, "0");
+}
+
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hash = await crypto.subtle.digest("SHA-256", data);
+
+    return Array.from(new Uint8Array(hash))
+        .map(byte => byte.toString(16).padStart(2, "0"))
+        .join("");
+}
+
+window.togglePassword = function(id, button) {
+    const input = document.getElementById(id);
+
+    if (input.type === "password") {
+        input.type = "text";
+        button.textContent = "Hide";
+    } else {
+        input.type = "password";
+        button.textContent = "Show";
+    }
+};
+
+form.addEventListener("reset", () => {
+    hideMessage();
+});
+
+form.addEventListener("submit", async event => {
+    event.preventDefault();
+    hideMessage();
+
+    if (!databaseReady) {
+        showMessage("Database is not ready. Please refresh the page.", "error");
+        return;
+    }
+
+    const displayName = document.getElementById("displayName").value.trim();
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
+    const role = document.getElementById("role").value;
+    const isActive = document.getElementById("status").value === "TRUE";
+
+    if (!displayName || !username || !password) {
+        showMessage("Please complete all required fields.", "error");
+        return;
+    }
+
+    if (password.length < 8) {
+        showMessage("Password must be at least 8 characters.", "error");
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showMessage("Passwords do not match.", "error");
+        return;
+    }
+
+    saveButton.disabled = true;
+    saveButton.textContent = "Creating...";
+
+    try {
+        const users = getSheet("Users") || [];
+
+        const duplicate = users.some(user =>
+            String(user.Username || "").trim().toLowerCase() ===
+            username.toLowerCase()
+        );
+
+        if (duplicate) {
+            throw new Error("Username already exists.");
+        }
+
+        const userID = generateUserID(users);
+        const passwordHash = await hashPassword(password);
+
+        const newUser = {
+            UserID: userID,
+            Username: username,
+            PasswordHash: passwordHash,
+            Role: role,
+            IsActive: isActive,
+            DisplayName: displayName,
+            CreatedAt: new Date().toISOString(),
+            LastLogin: ""
+        };
+
+        addRecord("Users", newUser);
+        await saveExcel();
+
+        showMessage(
+            "User successfully created! User ID: " + userID,
+            "success"
+        );
+
+        form.reset();
+
+    } catch (error) {
+        showMessage(error.message || "Unable to create user.", "error");
+    } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = "Create User";
+    }
+});
+
+initialize();
+</script>
+
+</body>
+</html>

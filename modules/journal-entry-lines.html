@@ -1,0 +1,350 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Journal Entry Lines | Mauccounting ERP System</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:26px;background:#f4f6fa;color:#26364e;font:14px Arial}
+h2{margin:0 0 6px}
+p{color:#8993a5}
+.card{background:white;border:1px solid #e8ecf2;border-radius:10px;padding:20px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+label{display:grid;gap:6px;color:#68758a;font-size:11px}
+input,select{width:100%;padding:10px;border:1px solid #dce2eb;border-radius:6px;background:white;color:#26364e}
+button{padding:9px 13px;border:0;border-radius:6px;background:#315efb;color:white;cursor:pointer;font-weight:bold;font-size:11px}
+button:disabled{opacity:.4;cursor:not-allowed}
+.danger{background:#fff0f0;color:#c03939}
+.msg{display:none;padding:11px;border-radius:6px;margin:12px 0;font-size:12px}
+.msg.good,.msg.bad{display:block}
+.good{background:#e8f8ef;color:#16834b}
+.bad{background:#fff0f0;color:#c03939}
+.wrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:750px}
+th,td{text-align:left;padding:11px;border-bottom:1px solid #edf0f5;font-size:12px}
+th{background:#f5f7fb;color:#68758a}
+.empty{text-align:center;color:#8993a5;padding:25px}
+.summary{display:flex;gap:30px;flex-wrap:wrap;margin:12px 0}
+.summary strong{font-size:18px}
+</style>
+</head>
+<body>
+
+<h2>Journal Entry Lines</h2>
+<p>Add debit and credit accounts to a draft journal.</p>
+<div id="msg" class="msg"></div>
+
+<section class="card">
+<h3>Journal Details</h3>
+<div class="grid">
+<label>Journal
+<select id="journalSelect" required></select>
+</label>
+<label>Journal Date
+<input id="journalDate" readonly>
+</label>
+<label>Status
+<input id="journalStatus" readonly>
+</label>
+</div>
+<div class="summary">
+<div>Total Debit<br><strong id="totalDebit">₱0.00</strong></div>
+<div>Total Credit<br><strong id="totalCredit">₱0.00</strong></div>
+<div>Difference<br><strong id="difference">₱0.00</strong></div>
+</div>
+</section>
+
+<section class="card">
+<h3>Add Journal Line</h3>
+<form id="form">
+<div class="grid">
+<label>Account
+<select id="accountSelect" required></select>
+</label>
+<label>Account Code
+<input id="accountCode" readonly>
+</label>
+<label>Account Name
+<input id="accountName" readonly>
+</label>
+<label>Description
+<input name="Description">
+</label>
+<label>Debit
+<input name="Debit" type="number" min="0" step="0.01" value="0">
+</label>
+<label>Credit
+<input name="Credit" type="number" min="0" step="0.01" value="0">
+</label>
+</div>
+<p><button id="save" type="submit">Add Journal Line</button></p>
+</form>
+</section>
+
+<section class="card">
+<h3>Journal Lines</h3>
+<div class="wrap">
+<table>
+<thead>
+<tr>
+<th>Line</th><th>Account Code</th><th>Account Name</th>
+<th>Description</th><th>Debit</th><th>Credit</th><th>Action</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+</section>
+
+<script type="module">
+import {
+ validateLicense,readExcel,getSheet,addRecord,deleteRecord,updateRecord,saveExcel
+} from "../excel.js";
+
+const $=id=>document.getElementById(id);
+const session=JSON.parse(sessionStorage.getItem("accsystem_session")||"null");
+if(!session){window.top.location.href="../login.html";throw new Error("Session required");}
+
+let journals=[],lines=[],accounts=[];
+let selectedJournal=sessionStorage.getItem("accsystem_selected_journal")||"";
+
+const now=()=>new Date().toISOString();
+const money=v=>"₱"+Number(v||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const msg=(t,bad=false)=>{$("msg").textContent=t;$("msg").className="msg "+(bad?"bad":"good");};
+
+function nextID(){
+ const nums=lines.map(r=>parseInt(String(r.LineID||"").replace(/\D/g,""))||0);
+ return "JEL"+String(Math.max(0,...nums)+1).padStart(5,"0");
+}
+
+function currentJournal(){
+ return journals.find(j=>String(j.JournalID)===String($("journalSelect").value));
+}
+
+function currentLines(){
+ const j=currentJournal();
+ return j?lines.filter(x=>String(x.JournalID)===String(j.JournalID)):[];
+}
+
+function totals(){
+ const own=currentLines();
+ return {
+  debit:own.reduce((s,x)=>s+Number(x.Debit||0),0),
+  credit:own.reduce((s,x)=>s+Number(x.Credit||0),0)
+ };
+}
+
+function renderJournals(){
+ const drafts=journals.filter(j=>String(j.Status).toLowerCase()==="draft");
+ $("journalSelect").innerHTML=drafts.map(j=>
+  `<option value="${esc(j.JournalID)}">${esc(j.JournalNo)} — ${esc(j.Description)}</option>`
+ ).join("");
+
+ if(drafts.some(j=>String(j.JournalID)===String(selectedJournal))){
+  $("journalSelect").value=selectedJournal;
+ }else{
+  selectedJournal=$("journalSelect").value;
+ }
+
+ renderJournal();
+}
+
+function renderJournal(){
+ const j=currentJournal();
+ const isDraft=!!j&&String(j.Status).toLowerCase()==="draft";
+ $("journalDate").value=j?.JournalDate||"";
+ $("journalStatus").value=j?.Status||"No draft journal selected";
+
+ $("form").querySelectorAll("input,select,button").forEach(x=>x.disabled=!isDraft);
+
+ if(!j){
+  $("tableBody").innerHTML=`<tr><td colspan="7" class="empty">No draft journals available.</td></tr>`;
+  $("totalDebit").textContent=money(0);
+  $("totalCredit").textContent=money(0);
+  $("difference").textContent=money(0);
+  return;
+ }
+
+ const t=totals();
+ $("totalDebit").textContent=money(t.debit);
+ $("totalCredit").textContent=money(t.credit);
+ $("difference").textContent=money(t.debit-t.credit);
+
+ $("tableBody").innerHTML=currentLines().map(r=>`
+  <tr>
+   <td>${esc(r.LineNo)}</td>
+   <td>${esc(r.AccountCode)}</td>
+   <td>${esc(r.AccountName)}</td>
+   <td>${esc(r.Description)}</td>
+   <td>${money(r.Debit)}</td>
+   <td>${money(r.Credit)}</td>
+   <td><button class="danger" data-delete="${esc(r.LineID)}">Delete</button></td>
+  </tr>
+ `).join("")||`<tr><td colspan="7" class="empty">No journal lines yet.</td></tr>`;
+}
+
+function renderAccounts(){
+ const active=accounts.filter(a=>a.IsActive===true||String(a.IsActive).toLowerCase()==="true"||a.IsActive===1);
+ $("accountSelect").innerHTML=active.map(a=>
+  `<option value="${esc(a.AccountID)}">${esc(a.AccountCode)} — ${esc(a.AccountName)}</option>`
+ ).join("");
+
+ updateAccountInfo();
+}
+
+function updateAccountInfo(){
+ const a=accounts.find(x=>String(x.AccountID)===$("accountSelect").value);
+ $("accountCode").value=a?.AccountCode??"";
+ $("accountName").value=a?.AccountName??"";
+}
+
+$("journalSelect").addEventListener("change",()=>{
+ selectedJournal=$("journalSelect").value;
+ sessionStorage.setItem("accsystem_selected_journal",selectedJournal);
+ renderJournal();
+});
+
+$("accountSelect").addEventListener("change",updateAccountInfo);
+
+$("form").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const button=$("save");
+
+ try{
+  button.disabled=true;
+
+  const j=currentJournal();
+  if(!j)throw new Error("Select a draft journal first.");
+  if(String(j.Status).toLowerCase()!=="draft")throw new Error("Posted journals cannot be changed.");
+
+  const account=accounts.find(a=>String(a.AccountID)===$("accountSelect").value);
+  if(!account)throw new Error("Select a valid account.");
+
+  const fd=new FormData(e.target);
+  const debit=Number(fd.get("Debit")||0);
+  const credit=Number(fd.get("Credit")||0);
+
+  if(!Number.isFinite(debit)||!Number.isFinite(credit)||debit<0||credit<0){
+   throw new Error("Negative or invalid amounts are not allowed.");
+  }
+  if((debit>0&&credit>0)||(debit===0&&credit===0)){
+   throw new Error("Enter an amount on Debit OR Credit only. Both cannot be zero.");
+  }
+
+  const own=currentLines();
+  const timestamp=now();
+
+  const record={
+   LineID:nextID(),
+   JournalID:j.JournalID,
+   LineNo:Math.max(0,...own.map(x=>Number(x.LineNo)||0))+1,
+   AccountID:account.AccountID,
+   AccountCode:account.AccountCode,
+   AccountName:account.AccountName,
+   Description:fd.get("Description")||"",
+   Debit:debit,
+   Credit:credit,
+   CustomerID:"",
+   VendorID:"",
+   Department:"",
+   Project:"",
+   UpdatedAt:timestamp
+  };
+
+  addRecord("JournalEntryLines",record);
+
+  const newDebit=own.reduce((s,x)=>s+Number(x.Debit||0),0)+debit;
+  const newCredit=own.reduce((s,x)=>s+Number(x.Credit||0),0)+credit;
+
+  updateRecord("JournalEntries","JournalID",j.JournalID,{
+   TotalDebit:Math.round(newDebit*100)/100,
+   TotalCredit:Math.round(newCredit*100)/100,
+   UpdatedAt:timestamp
+  });
+
+  await saveExcel("Add journal line to "+j.JournalNo);
+
+  await reloadLines();
+  e.target.reset();
+  $("accountCode").value="";
+  $("accountName").value="";
+  msg("Journal line added successfully.");
+
+ }catch(err){
+  console.error(err);
+  msg(err.message,true);
+ }finally{
+  button.disabled=false;
+  renderJournal();
+ }
+});
+
+$("tableBody").addEventListener("click",async e=>{
+ const lineID=e.target.dataset.delete;
+ if(!lineID)return;
+
+ try{
+  const j=currentJournal();
+  if(!j||String(j.Status).toLowerCase()!=="draft"){
+   throw new Error("Only draft journal lines can be deleted.");
+  }
+
+  if(!confirm("Delete this journal line?"))return;
+
+  deleteRecord("JournalEntryLines","LineID",lineID);
+
+  const remaining=lines.filter(x=>String(x.LineID)!==String(lineID)&&String(x.JournalID)===String(j.JournalID));
+  const debit=remaining.reduce((s,x)=>s+Number(x.Debit||0),0);
+  const credit=remaining.reduce((s,x)=>s+Number(x.Credit||0),0);
+
+  updateRecord("JournalEntries","JournalID",j.JournalID,{
+   TotalDebit:Math.round(debit*100)/100,
+   TotalCredit:Math.round(credit*100)/100,
+   UpdatedAt:now()
+  });
+
+  await saveExcel("Delete journal line from "+j.JournalNo);
+  await reloadLines();
+  msg("Journal line deleted.");
+ }catch(err){
+  console.error(err);
+  msg(err.message,true);
+ }
+});
+
+async function reloadLines(){
+ journals=getSheet("JournalEntries");
+ lines=getSheet("JournalEntryLines");
+ renderJournals();
+}
+
+async function init(){
+ try{
+  const license=await validateLicense();
+  if(!license?.valid)throw new Error(license?.message||"License validation failed.");
+
+  await readExcel();
+
+  journals=getSheet("JournalEntries");
+  lines=getSheet("JournalEntryLines");
+  accounts=getSheet("ChartOfAccounts");
+
+  renderAccounts();
+  renderJournals();
+
+  if(!accounts.length)msg("No Chart of Accounts records found.",true);
+  else msg("Journal Entry Lines loaded.");
+
+ }catch(err){
+  console.error(err);
+  msg(err.message,true);
+ }
+}
+init();
+</script>
+</body>
+</html>

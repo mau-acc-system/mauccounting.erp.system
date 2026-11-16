@@ -1,0 +1,516 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Statement of Financial Position | Mauccounting ERP System</title>
+
+<!-- SheetJS - Required by excel.js -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:26px;background:#f3f5f9;color:#202b3c;font:14px Arial,sans-serif}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+.muted{color:#8792a4;font-size:12px}
+.title{font-size:24px;font-weight:700;margin:5px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button{border:1px solid #d9e0ea;background:#fff;border-radius:7px;padding:9px 13px;cursor:pointer;color:#253247}
+.primary{background:#315efb;color:#fff;border-color:#315efb}
+.filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:18px 0}
+.filters label{display:grid;gap:6px;color:#66748a;font-size:11px}
+input{padding:9px 11px;border:1px solid #d9e0ea;border-radius:7px;background:#fff;min-width:170px;color:#202b3c}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin:16px 0}
+.stat{background:#fff;border:1px solid #e5eaf1;border-radius:9px;padding:14px}
+.stat span{display:block;color:#7c8799;font-size:11px}
+.stat b{display:block;font-size:19px;margin-top:7px}
+.statement{max-width:1050px;margin:0 auto;background:#fff;border:1px solid #e5eaf1;border-radius:10px;padding:30px 38px;box-shadow:0 3px 14px #24344a0a}
+.statement-head{text-align:center;padding-bottom:20px;border-bottom:1px solid #e8ecf2;margin-bottom:20px}
+.statement-head h2{font-size:17px;letter-spacing:.7px;margin:7px 0}
+.statement-head p{margin:4px 0;color:#69768a;font-size:12px}
+.section-title{font-size:13px;font-weight:700;letter-spacing:.5px;margin:22px 0 8px;text-transform:uppercase}
+.sub-title{font-weight:700;margin:13px 0 5px;color:#344258}
+.line{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:12px;padding:6px 4px;border-bottom:1px solid #f0f2f6}
+.line .amount{text-align:right;font-variant-numeric:tabular-nums}
+.line.indent{padding-left:20px}
+.line.subtotal{font-weight:700;border-top:1px solid #9aa5b5;border-bottom:0;margin-top:5px;padding-top:9px}
+.line.grand{font-weight:700;border-top:2px solid #344258;border-bottom:3px double #344258;margin-top:7px;padding:10px 4px}
+.empty{color:#8792a4;padding:9px 4px;font-style:italic}
+.check{margin-top:22px;padding:13px 15px;border-radius:8px;background:#f5f7fa;display:flex;justify-content:space-between;gap:12px;font-weight:700}
+.check.ok{background:#edf8f1;color:#17643a}
+.check.bad{background:#fff1ef;color:#a13d32}
+.note{margin-top:16px;color:#7a8596;font-size:11px;line-height:1.5}
+.error{padding:16px;background:#fff1ef;border:1px solid #ffd5ce;border-radius:8px;color:#a13d32}
+
+@media(max-width:760px){
+ body{padding:14px}
+ .head{display:block}
+ .actions{margin-top:12px}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .statement{padding:22px 16px}
+ .line{grid-template-columns:minmax(0,1fr) 125px}
+ .stat b{font-size:16px}
+}
+@media print{
+ body{padding:0;background:#fff}
+ .head .actions,.filters,.stats{display:none!important}
+ .statement{max-width:none;border:0;box-shadow:none;padding:0}
+ .statement-head{padding-top:8px}
+ .check{border:1px solid #aaa;background:#fff!important;color:#111!important}
+ *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+
+<body>
+
+<header class="head">
+ <div>
+  <div class="muted" id="company">Mauccounting ERP System</div>
+  <div class="title">Statement of Financial Position</div>
+  <div class="muted">Currency: <span id="currency">PHP</span></div>
+ </div>
+ <div class="actions">
+  <button id="csvBtn">Export CSV</button>
+  <button id="printBtn" class="primary">Print</button>
+ </div>
+</header>
+
+<div class="filters">
+ <label>As of Date
+  <input type="date" id="asOfDate">
+ </label>
+ <button id="applyBtn" class="primary">Generate Report</button>
+</div>
+
+<div id="stats" class="stats"></div>
+<main id="reportBody" class="statement">Loading Balance Sheet...</main>
+
+<script type="module">
+import {
+ validateLicense,
+ readExcel,
+ getSheet
+} from "../excel.js";
+
+const $=id=>document.getElementById(id);
+
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({
+ "&":"&amp;",
+ "<":"&lt;",
+ ">":"&gt;",
+ '"':"&quot;",
+ "'":"&#39;"
+}[c]));
+
+const num=v=>{
+ const n=Number(String(v??0).replace(/[,₱$ ]/g,""));
+ return Number.isFinite(n)?n:0;
+};
+
+const rows=name=>{
+ try{
+  const v=getSheet(name);
+  return Array.isArray(v)?v:[];
+ }catch{
+  return [];
+ }
+};
+
+const money=(v,cur)=>new Intl.NumberFormat("en-PH",{
+ style:"currency",
+ currency:cur||"PHP",
+ minimumFractionDigits:2
+}).format(num(v));
+
+const dateOnly=v=>{
+ if(!v)return "";
+
+ if(v instanceof Date){
+  return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,"0")}-${String(v.getDate()).padStart(2,"0")}`;
+ }
+
+ const s=String(v).trim();
+
+ if(/^\d{4}-\d{2}-\d{2}/.test(s))
+  return s.slice(0,10);
+
+ if(/^\d+(\.\d+)?$/.test(s)){
+  const d=new Date(Math.round((Number(s)-25569)*86400000));
+  return isNaN(d)?"":d.toISOString().slice(0,10);
+ }
+
+ const d=new Date(s);
+ return isNaN(d)?"":d.toISOString().slice(0,10);
+};
+
+const today=()=>{
+ const d=new Date();
+ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+};
+
+let state={
+ company:"Mauccounting ERP System",
+ currency:"PHP",
+ coa:[],
+ lines:[],
+ journals:[],
+ result:null
+};
+
+function accountType(a){
+ const t=String(a.AccountType||"").trim().toLowerCase();
+
+ if(["asset","assets"].includes(t))return "asset";
+ if(["liability","liabilities"].includes(t))return "liability";
+ if(["equity","equities"].includes(t))return "equity";
+ if(["revenue","revenues","income","other income"].includes(t))return "revenue";
+ if(["expense","expenses","cost of sales","cost of goods sold"].includes(t))return "expense";
+
+ return t;
+}
+
+function accountClass(a,type){
+ const raw=String(
+  a.AccountClassification||
+  a.Classification||
+  a.AccountCategory||
+  a.AccountSubType||
+  a.SubType||
+  ""
+ ).trim();
+
+ if(raw)return raw;
+
+ return type==="asset"?"Other Assets":
+        type==="liability"?"Other Liabilities":
+        type==="equity"?"Other Equity":type;
+}
+
+function build(asOf){
+
+ const journalMap=Object.fromEntries(
+  state.journals.map(j=>[String(j.JournalID),j])
+ );
+
+ const accountMap=Object.fromEntries(
+  state.coa.map(a=>[String(a.AccountID),a])
+ );
+
+ const balances=new Map();
+ let revenue=0,expense=0;
+
+ for(const line of state.lines){
+
+  const j=journalMap[String(line.JournalID)];
+
+  if(!j||String(j.Status||"").trim().toLowerCase()!=="posted")
+   continue;
+
+  const jd=dateOnly(j.JournalDate);
+
+  if(!jd||jd>asOf)continue;
+
+  const a=accountMap[String(line.AccountID)]||line;
+  const type=accountType(a);
+
+  const debit=num(line.Debit);
+  const credit=num(line.Credit);
+
+  if(["asset","liability","equity"].includes(type)){
+
+   const key=String(
+    a.AccountID||
+    line.AccountID||
+    a.AccountCode||
+    line.AccountCode
+   );
+
+   if(!balances.has(key)){
+    balances.set(key,{
+     key,
+     code:a.AccountCode||line.AccountCode||"",
+     name:a.AccountName||line.AccountName||"Unnamed Account",
+     type,
+     classification:accountClass(a,type),
+     balance:0
+    });
+   }
+
+   const x=balances.get(key);
+
+   x.balance+=type==="asset"
+    ?debit-credit
+    :credit-debit;
+
+  }else if(type==="revenue"){
+   revenue+=credit-debit;
+  }else if(type==="expense"){
+   expense+=debit-credit;
+  }
+ }
+
+ const all=[...balances.values()];
+
+ const assets=all.filter(x=>x.type==="asset");
+ const liabilities=all.filter(x=>x.type==="liability");
+ const equity=all.filter(x=>x.type==="equity");
+
+ const netIncome=revenue-expense;
+
+ const totalAssets=assets.reduce((s,x)=>s+x.balance,0);
+ const totalLiabilities=liabilities.reduce((s,x)=>s+x.balance,0);
+ const totalEquity=equity.reduce((s,x)=>s+x.balance,0)+netIncome;
+
+ return {
+  asOf,
+  assets,
+  liabilities,
+  equity,
+  revenue,
+  expense,
+  netIncome,
+  totalAssets,
+  totalLiabilities,
+  totalEquity,
+  totalLiabilitiesEquity:totalLiabilities+totalEquity,
+  difference:totalAssets-totalLiabilities-totalEquity
+ };
+}
+
+function grouped(items){
+ const map=new Map();
+
+ for(const x of items){
+  const k=x.classification||"Other";
+  if(!map.has(k))map.set(k,[]);
+  map.get(k).push(x);
+ }
+
+ return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+}
+
+function accountLines(items){
+
+ if(!items.length)
+  return '<div class="empty">No posted balances as of this date.</div>';
+
+ let html="";
+
+ for(const [group,list] of grouped(items)){
+
+  html+=`<div class="sub-title">${esc(group)}</div>`;
+
+  list.sort((a,b)=>String(a.code).localeCompare(String(b.code)));
+
+  for(const x of list){
+   html+=`
+    <div class="line indent">
+     <div>${esc(x.code?x.code+" — ":"")}${esc(x.name)}</div>
+     <div class="amount">${money(x.balance,state.currency)}</div>
+    </div>
+   `;
+  }
+
+  const sum=list.reduce((s,x)=>s+x.balance,0);
+
+  html+=`
+   <div class="line subtotal">
+    <div>Total ${esc(group)}</div>
+    <div class="amount">${money(sum,state.currency)}</div>
+   </div>
+  `;
+ }
+
+ return html;
+}
+
+function render(){
+
+ const r=state.result;
+ if(!r)return;
+
+ const fmt=v=>money(v,state.currency);
+
+ $("stats").innerHTML=[
+  ["Total Assets",r.totalAssets],
+  ["Total Liabilities",r.totalLiabilities],
+  ["Total Equity",r.totalEquity],
+  ["Net Income",r.netIncome]
+ ].map(([l,v])=>`
+  <div class="stat">
+   <span>${l}</span>
+   <b>${fmt(v)}</b>
+  </div>
+ `).join("");
+
+ const balanced=Math.abs(r.difference)<0.005;
+
+ $("reportBody").innerHTML=`
+
+ <div class="statement-head">
+  <div style="font-weight:700;font-size:15px">${esc(state.company)}</div>
+  <h2>STATEMENT OF FINANCIAL POSITION</h2>
+  <p>As of ${esc(r.asOf)}</p>
+  <p>(Expressed in ${esc(state.currency)})</p>
+ </div>
+
+ <div class="section-title">Assets</div>
+ ${accountLines(r.assets)}
+
+ <div class="line grand">
+  <div>TOTAL ASSETS</div>
+  <div class="amount">${fmt(r.totalAssets)}</div>
+ </div>
+
+ <div class="section-title">Liabilities</div>
+ ${accountLines(r.liabilities)}
+
+ <div class="line subtotal">
+  <div>Total Liabilities</div>
+  <div class="amount">${fmt(r.totalLiabilities)}</div>
+ </div>
+
+ <div class="section-title">Equity</div>
+ ${accountLines(r.equity)}
+
+ <div class="line">
+  <div>Current Earnings (Posted Revenue less Expenses)</div>
+  <div class="amount">${fmt(r.netIncome)}</div>
+ </div>
+
+ <div class="line grand">
+  <div>TOTAL EQUITY</div>
+  <div class="amount">${fmt(r.totalEquity)}</div>
+ </div>
+
+ <div class="line grand">
+  <div>TOTAL LIABILITIES AND EQUITY</div>
+  <div class="amount">${fmt(r.totalLiabilitiesEquity)}</div>
+ </div>
+
+ <div class="check ${balanced?'ok':'bad'}">
+  <span>${balanced?'BALANCED':'OUT OF BALANCE'}</span>
+  <span>Difference: ${fmt(r.difference)}</span>
+ </div>
+
+ <div class="note">
+  Basis: Posted journal entries dated on or before the selected date.
+  Current earnings are calculated from posted Revenue and Expense
+  accounts in the available journal history. Opening balances and
+  formal closing entries are not automatically assumed. Account
+  groups use available account classification fields; accounts
+  without a classification are shown under an “Other” group.
+ </div>
+ `;
+}
+
+function generate(){
+ const date=$("asOfDate").value||today();
+
+ state.result=build(date);
+ render();
+}
+
+function exportCSV(){
+
+ const r=state.result;
+ if(!r)return;
+
+ const data=[
+  ["Company",state.company],
+  ["Statement of Financial Position",""],
+  ["As of Date",r.asOf],
+  ["Currency",state.currency],
+  [],
+  ["ASSETS",""],
+  ["Account Code","Account Name","Classification","Balance"],
+  ...r.assets.map(x=>[x.code,x.name,x.classification,x.balance]),
+  ["TOTAL ASSETS","","",r.totalAssets],
+  [],
+  ["LIABILITIES",""],
+  ["Account Code","Account Name","Classification","Balance"],
+  ...r.liabilities.map(x=>[x.code,x.name,x.classification,x.balance]),
+  ["TOTAL LIABILITIES","","",r.totalLiabilities],
+  [],
+  ["EQUITY",""],
+  ["Account Code","Account Name","Classification","Balance"],
+  ...r.equity.map(x=>[x.code,x.name,x.classification,x.balance]),
+  ["Current Earnings","","",r.netIncome],
+  ["TOTAL EQUITY","","",r.totalEquity],
+  ["TOTAL LIABILITIES AND EQUITY","", "",r.totalLiabilitiesEquity],
+  ["BALANCE DIFFERENCE","","",r.difference]
+ ];
+
+ const csv=data.map(row=>
+  row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')
+ ).join('\r\n');
+
+ const a=document.createElement('a');
+
+ a.href=URL.createObjectURL(
+  new Blob([csv],{type:'text/csv;charset=utf-8'})
+ );
+
+ a.download='balance-sheet.csv';
+ a.click();
+
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+async function start(){
+
+ try{
+
+  const ok=await validateLicense();
+
+  if(ok===false)
+   throw new Error('License validation failed.');
+
+  await readExcel();
+
+  const company=rows('CompanySetup')[0]||{};
+
+  state.company=company.CompanyName||'Mauccounting ERP System';
+  state.currency=company.Currency||'PHP';
+
+  state.coa=rows('ChartOfAccounts');
+  state.lines=rows('JournalEntryLines');
+  state.journals=rows('JournalEntries');
+
+  $("company").textContent=state.company;
+  $("currency").textContent=state.currency;
+
+  // Default date: Today
+  $("asOfDate").value=today();
+
+  // Automatically generate report on page load
+  generate();
+
+ }catch(e){
+
+  $("reportBody").innerHTML=`
+   <div class="error">
+    Unable to load Balance Sheet: ${esc(e.message||e)}
+    <br>
+    <small>
+     Check license, Excel database connection,
+     and required worksheet names.
+    </small>
+   </div>
+  `;
+
+ }
+}
+
+$("applyBtn").addEventListener("click",generate);
+$("asOfDate").addEventListener("change",generate);
+$("csvBtn").addEventListener("click",exportCSV);
+$("printBtn").addEventListener("click",()=>window.print());
+
+start();
+
+</script>
+</body>
+</html>

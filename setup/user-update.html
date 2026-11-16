@@ -1,0 +1,743 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Update User | Mauccounting ERP System</title>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 28px;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6fa;
+    color: #202b3c;
+}
+
+.page-title {
+    margin-bottom: 24px;
+}
+
+.page-title h2 {
+    margin: 0 0 7px;
+    font-size: 23px;
+}
+
+.page-title p {
+    margin: 0;
+    color: #8993a5;
+    font-size: 13px;
+}
+
+.card {
+    background: white;
+    border: 1px solid #e8ecf2;
+    border-radius: 10px;
+    padding: 25px;
+    max-width: 900px;
+    margin-bottom: 22px;
+}
+
+.card h3 {
+    font-size: 16px;
+    margin: 0 0 22px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.field label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #536176;
+}
+
+input, select {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #dce2eb;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    background: white;
+}
+
+input:focus, select:focus {
+    border-color: #315efb;
+    box-shadow: 0 0 0 3px rgba(49,94,251,.08);
+}
+
+input:disabled {
+    background: #f3f5f9;
+    color: #8993a5;
+}
+
+.search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    max-width: 650px;
+}
+
+.search-row button {
+    border: 0;
+    border-radius: 6px;
+    padding: 0 20px;
+    background: #315efb;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 19px;
+}
+
+.field.full {
+    grid-column: 1 / -1;
+}
+
+.password-wrap {
+    position: relative;
+}
+
+.password-wrap input {
+    padding-right: 75px;
+}
+
+.show-password {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: none;
+    color: #315efb;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.hint {
+    color: #8993a5;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.user-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    margin-top: 18px;
+    padding: 15px;
+    background: #f7f9fc;
+    border-radius: 7px;
+}
+
+.detail-label {
+    color: #8993a5;
+    font-size: 11px;
+    margin-bottom: 5px;
+}
+
+.detail-value {
+    color: #26364e;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #edf0f5;
+}
+
+button.action {
+    border: 0;
+    border-radius: 6px;
+    padding: 11px 19px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.save {
+    background: #315efb;
+    color: white;
+}
+
+.save:hover {
+    background: #244bd2;
+}
+
+.clear {
+    background: #edf0f5;
+    color: #536176;
+}
+
+.message {
+    display: none;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 20px;
+}
+
+.message.success {
+    display: block;
+    background: #e8f8ef;
+    color: #16834b;
+}
+
+.message.error {
+    display: block;
+    background: #fff0f0;
+    color: #c03939;
+}
+
+.status-note {
+    padding: 13px;
+    background: #f7f9fc;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #68768b;
+    line-height: 1.5;
+}
+
+button:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+@media(max-width: 600px) {
+    body {
+        padding: 17px;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .field.full {
+        grid-column: auto;
+    }
+
+    .search-row {
+        grid-template-columns: 1fr;
+    }
+
+    .search-row button {
+        height: 40px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="page-title">
+    <h2>Update User</h2>
+    <p>View and modify existing Mauccounting ERP System user accounts.</p>
+</div>
+
+<div id="message" class="message"></div>
+
+<div class="card">
+    <h3>Select User Account</h3>
+
+    <div class="search-row">
+        <div class="field">
+            <label for="userSelect">User Account</label>
+            <select id="userSelect" disabled>
+                <option value="">Loading users...</option>
+            </select>
+        </div>
+
+        <button type="button" id="refreshButton">Refresh</button>
+    </div>
+
+    <div class="user-details" id="userDetails" style="display:none;">
+        <div>
+            <div class="detail-label">User ID</div>
+            <div class="detail-value" id="detailID">-</div>
+        </div>
+
+        <div>
+            <div class="detail-label">Created At</div>
+            <div class="detail-value" id="detailCreated">-</div>
+        </div>
+
+        <div>
+            <div class="detail-label">Last Login</div>
+            <div class="detail-value" id="detailLogin">-</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>User Information</h3>
+
+    <form id="updateForm">
+
+        <div class="form-grid">
+
+            <div class="field">
+                <label for="displayName">Display Name</label>
+                <input type="text" id="displayName" required
+                       placeholder="Enter full name" disabled>
+            </div>
+
+            <div class="field">
+                <label for="username">Username</label>
+                <input type="text" id="username" required
+                       placeholder="Enter username"
+                       autocomplete="off" disabled>
+            </div>
+
+            <div class="field">
+                <label for="role">User Role</label>
+                <select id="role" required disabled>
+                    <option value="User">User</option>
+                    <option value="Administrator">Administrator</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="status">Account Status</label>
+                <select id="status" required disabled>
+                    <option value="TRUE">Active</option>
+                    <option value="FALSE">Inactive</option>
+                </select>
+            </div>
+
+        </div>
+
+        <div style="margin-top:30px;">
+            <h3>Change Password</h3>
+
+            <div class="form-grid">
+
+                <div class="field">
+                    <label for="newPassword">New Password</label>
+                    <div class="password-wrap">
+                        <input type="password" id="newPassword"
+                               minlength="8"
+                               placeholder="Leave blank to retain current password"
+                               autocomplete="new-password" disabled>
+                        <button type="button" class="show-password"
+                                onclick="togglePassword('newPassword',this)">
+                            Show
+                        </button>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="confirmPassword">Confirm New Password</label>
+                    <div class="password-wrap">
+                        <input type="password" id="confirmPassword"
+                               minlength="8"
+                               placeholder="Re-enter new password"
+                               autocomplete="new-password" disabled>
+                        <button type="button" class="show-password"
+                                onclick="togglePassword('confirmPassword',this)">
+                            Show
+                        </button>
+                    </div>
+                </div>
+
+                <div class="field full">
+                    <div class="hint">
+                        Password fields are optional. Leave both blank to keep the existing password.
+                        If you enter a new password, it must be at least 8 characters.
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="status-note" style="margin-top:25px;">
+            <strong>Account status:</strong>
+            Inactive users cannot sign in. Changing a user's role or status does not automatically
+            change their User Access permissions.
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="action save" id="saveButton" disabled>
+                Save Changes
+            </button>
+
+            <button type="button" class="action clear" id="resetButton" disabled>
+                Reset Form
+            </button>
+        </div>
+
+    </form>
+</div>
+
+<script type="module">
+import {
+    validateLicense,
+    readExcel,
+    getSheet,
+    updateRecord,
+    saveExcel
+} from "../excel.js";
+
+const session = JSON.parse(
+    sessionStorage.getItem("accsystem_session") || "null"
+);
+
+if (!session) {
+    window.top.location.href = "../login.html";
+}
+
+if (!session || session.Role !== "Administrator") {
+    document.body.innerHTML =
+        "<h2>Access Denied</h2><p>Administrator access is required.</p>";
+    throw new Error("Unauthorized access");
+}
+
+let users = [];
+let selectedUser = null;
+let databaseReady = false;
+
+const userSelect = document.getElementById("userSelect");
+const form = document.getElementById("updateForm");
+const message = document.getElementById("message");
+const saveButton = document.getElementById("saveButton");
+const resetButton = document.getElementById("resetButton");
+
+const fields = [
+    "displayName",
+    "username",
+    "role",
+    "status",
+    "newPassword",
+    "confirmPassword"
+];
+
+function showMessage(text, type) {
+    message.textContent = text;
+    message.className = "message " + type;
+}
+
+function hideMessage() {
+    message.textContent = "";
+    message.className = "message";
+}
+
+function enableForm(enabled) {
+    fields.forEach(id => {
+        document.getElementById(id).disabled = !enabled;
+    });
+
+    saveButton.disabled = !enabled;
+    resetButton.disabled = !enabled;
+}
+
+function clearForm() {
+    form.reset();
+    selectedUser = null;
+
+    document.getElementById("userDetails").style.display = "none";
+    enableForm(false);
+}
+
+function formatDate(value) {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (isNaN(date.getTime())) return String(value);
+
+    return date.toLocaleString();
+}
+
+function populateUsers() {
+    users = getSheet("Users") || [];
+
+    userSelect.innerHTML = '<option value="">Select a user</option>';
+
+    users.forEach(user => {
+        const option = document.createElement("option");
+        option.value = user.UserID;
+        option.textContent =
+            (user.DisplayName || user.Username) +
+            " (" + user.Username + ")";
+
+        userSelect.appendChild(option);
+    });
+
+    userSelect.disabled = false;
+}
+
+function loadSelectedUser() {
+    hideMessage();
+
+    const userID = userSelect.value;
+
+    selectedUser = users.find(
+        user => String(user.UserID) === String(userID)
+    );
+
+    if (!selectedUser) {
+        clearForm();
+        return;
+    }
+
+    document.getElementById("displayName").value =
+        selectedUser.DisplayName || "";
+
+    document.getElementById("username").value =
+        selectedUser.Username || "";
+
+    document.getElementById("role").value =
+        selectedUser.Role || "User";
+
+    document.getElementById("status").value =
+        selectedUser.IsActive === true ||
+        String(selectedUser.IsActive).toLowerCase() === "true" ||
+        String(selectedUser.IsActive) === "1"
+            ? "TRUE"
+            : "FALSE";
+
+    document.getElementById("newPassword").value = "";
+    document.getElementById("confirmPassword").value = "";
+
+    document.getElementById("detailID").textContent =
+        selectedUser.UserID || "-";
+
+    document.getElementById("detailCreated").textContent =
+        formatDate(selectedUser.CreatedAt);
+
+    document.getElementById("detailLogin").textContent =
+        formatDate(selectedUser.LastLogin);
+
+    document.getElementById("userDetails").style.display = "flex";
+
+    enableForm(true);
+}
+
+async function hashPassword(password) {
+    const data = new TextEncoder().encode(password);
+    const hash = await crypto.subtle.digest("SHA-256", data);
+
+    return Array.from(new Uint8Array(hash))
+        .map(byte => byte.toString(16).padStart(2, "0"))
+        .join("");
+}
+
+window.togglePassword = function(id, button) {
+    const input = document.getElementById(id);
+
+    if (input.type === "password") {
+        input.type = "text";
+        button.textContent = "Hide";
+    } else {
+        input.type = "password";
+        button.textContent = "Show";
+    }
+};
+
+async function initialize() {
+    try {
+        const license = await validateLicense();
+
+        if (!license.valid) {
+            throw new Error(
+                license.message || "License validation failed."
+            );
+        }
+
+        await readExcel();
+
+        populateUsers();
+        databaseReady = true;
+
+    } catch (error) {
+        userSelect.innerHTML =
+            '<option value="">Database unavailable</option>';
+
+        showMessage(
+            "Database connection failed: " + error.message,
+            "error"
+        );
+    }
+}
+
+userSelect.addEventListener("change", loadSelectedUser);
+
+resetButton.addEventListener("click", () => {
+    if (!selectedUser) return;
+
+    loadSelectedUser();
+    showMessage("Form has been reset to the saved user information.", "success");
+});
+
+document.getElementById("refreshButton").addEventListener("click", async () => {
+    const previousID = userSelect.value;
+
+    hideMessage();
+    userSelect.disabled = true;
+
+    try {
+        await readExcel();
+        populateUsers();
+
+        if (users.some(user => String(user.UserID) === previousID)) {
+            userSelect.value = previousID;
+            loadSelectedUser();
+        } else {
+            clearForm();
+        }
+
+        showMessage("User list refreshed.", "success");
+
+    } catch (error) {
+        showMessage("Unable to refresh: " + error.message, "error");
+    }
+});
+
+form.addEventListener("submit", async event => {
+    event.preventDefault();
+    hideMessage();
+
+    if (!databaseReady || !selectedUser) {
+        showMessage("Please select a user first.", "error");
+        return;
+    }
+
+    const displayName =
+        document.getElementById("displayName").value.trim();
+
+    const username =
+        document.getElementById("username").value.trim();
+
+    const role =
+        document.getElementById("role").value;
+
+    const isActive =
+        document.getElementById("status").value === "TRUE";
+
+    const newPassword =
+        document.getElementById("newPassword").value;
+
+    const confirmPassword =
+        document.getElementById("confirmPassword").value;
+
+    if (!displayName || !username) {
+        showMessage("Display Name and Username are required.", "error");
+        return;
+    }
+
+    const duplicate = users.some(user =>
+        String(user.UserID) !== String(selectedUser.UserID) &&
+        String(user.Username || "").trim().toLowerCase() ===
+        username.toLowerCase()
+    );
+
+    if (duplicate) {
+        showMessage("Username already exists. Please choose another.", "error");
+        return;
+    }
+
+    if (newPassword || confirmPassword) {
+        if (newPassword.length < 8) {
+            showMessage("New password must be at least 8 characters.", "error");
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            showMessage("Passwords do not match.", "error");
+            return;
+        }
+    }
+
+    // Prevent accidentally disabling the currently logged-in administrator.
+    if (
+        String(selectedUser.UserID) === String(session.UserID) &&
+        !isActive
+    ) {
+        showMessage("You cannot deactivate your own account while logged in.", "error");
+        return;
+    }
+
+    saveButton.disabled = true;
+    resetButton.disabled = true;
+    saveButton.textContent = "Saving...";
+
+    try {
+        const updates = {
+            DisplayName: displayName,
+            Username: username,
+            Role: role,
+            IsActive: isActive
+        };
+
+        if (newPassword) {
+            updates.PasswordHash = await hashPassword(newPassword);
+        }
+
+        updateRecord(
+            "Users",
+            "UserID",
+            selectedUser.UserID,
+            updates
+        );
+
+        await saveExcel();
+
+        await readExcel();
+        users = getSheet("Users") || [];
+
+        const updatedUser = users.find(
+            user => String(user.UserID) === String(selectedUser.UserID)
+        );
+
+        selectedUser = updatedUser || null;
+
+        populateUsers();
+
+        if (selectedUser) {
+            userSelect.value = selectedUser.UserID;
+            loadSelectedUser();
+        }
+
+        showMessage(
+            "User account successfully updated.",
+            "success"
+        );
+
+    } catch (error) {
+        showMessage(
+            "Unable to update user: " + error.message,
+            "error"
+        );
+    } finally {
+        saveButton.disabled = !selectedUser;
+        resetButton.disabled = !selectedUser;
+        saveButton.textContent = "Save Changes";
+    }
+});
+
+enableForm(false);
+initialize();
+</script>
+
+</body>
+</html>
